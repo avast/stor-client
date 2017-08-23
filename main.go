@@ -1,0 +1,66 @@
+package main
+
+import (
+	"bufio"
+	"github.com/alecthomas/kingpin"
+	"github.com/avast/stor-cli/client"
+	log "github.com/sirupsen/logrus"
+	"os"
+	"regexp"
+	"time"
+)
+
+const VERSION = "0.1.0"
+
+var (
+	storageUrl  = kingpin.Flag("storage", "storage url").Short('u').Default("http://stor.whale.int.avast.com").URL()
+	downloadDir = kingpin.Arg("downloadDir", "directory for downloaded files").Required().String()
+	max         = kingpin.Flag("max", "max download process").Default("4").Int()
+	devnull     = kingpin.Flag("devnull", "download file to /dev/null").Bool()
+	verbose     = kingpin.Flag("verbose", "more talkativ output").Short('v').Bool()
+	timeout     = kingpin.Flag("timeout", "connetion timeout").Default(storclient.DefaultTimeout.String()).Duration()
+)
+
+func main() {
+	kingpin.Version(VERSION)
+	kingpin.Parse()
+
+	if *verbose {
+		log.SetLevel(log.DebugLevel)
+	}
+
+	startTime := time.Now()
+	client := storclient.New(**storageUrl, storclient.StorClientOpts{
+		Max:     *max,
+		Devnull: *devnull,
+		Timeout: *timeout,
+	})
+	client.Start()
+
+	shas := readShaFromStdin()
+	for sha := range shas {
+		client.Download(sha)
+	}
+
+	total := client.Wait()
+
+	total.Print(startTime)
+}
+
+func readShaFromStdin() <-chan string {
+	shas := make(chan string, 32)
+
+	go func() {
+		re := regexp.MustCompile("[a-fA-F0-9]{64}")
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			for _, sha := range re.FindStringSubmatch(scanner.Text()) {
+				shas <- sha
+			}
+		}
+
+		close(shas)
+	}()
+
+	return shas
+}
