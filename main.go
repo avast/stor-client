@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"github.com/alecthomas/kingpin"
-	"github.com/avast/stor-cli/client"
+	"github.com/avast/stor-client/client"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"regexp"

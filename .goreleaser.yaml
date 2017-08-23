@@ -1,0 +1,17 @@
+builds:
+  - binary: stor-cli
+    goos:
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
+fpm:
+  vendor: Avast Software
+  homepage: https://github.com/avast/stor-client
+  maintainer: Jan Seidl <seidl@avast.com>
+  description: Stor CLI.
+  license: MIT
+  formats:
+    - deb
+    - rpm
