@@ -12,7 +12,7 @@ echo EE2BF0BFD365EBF829F8D07B197B7A15F39760CD14C6D3BFDFBAD2B145CB72B8 | stor-cli
 
 ## golang client
 
-simple example
+async example
 
 ```
 client := storclient.New(storageUrl, storclient.StorClientOpts{})
