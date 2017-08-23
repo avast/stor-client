@@ -70,10 +70,11 @@ type TotalStat struct {
 const DefaultMax = 4
 const DefaultTimeout = 30 * time.Second
 
-func New(storUrl url.URL, opts StorClientOpts) *StorClient {
+func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	client := StorClient{}
 
 	client.storageUrl = storUrl
+	client.downloadDir = downloadDir
 
 	client.max = DefaultMax
 	if opts.Max != 0 {

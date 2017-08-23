@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.1.0"
+var version = "master"
 
 var (
 	storageUrl  = kingpin.Flag("storage", "storage url").Short('u').Default("http://stor.whale.int.avast.com").URL()
@@ -22,7 +22,7 @@ var (
 )
 
 func main() {
-	kingpin.Version(VERSION)
+	kingpin.Version(version)
 	kingpin.Parse()
 
 	if *verbose {
@@ -30,7 +30,7 @@ func main() {
 	}
 
 	startTime := time.Now()
-	client := storclient.New(**storageUrl, storclient.StorClientOpts{
+	client := storclient.New(**storageUrl, *downloadDir, storclient.StorClientOpts{
 		Max:     *max,
 		Devnull: *devnull,
 		Timeout: *timeout,
