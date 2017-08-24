@@ -16,7 +16,6 @@ SYNOPSIS
 package storclient
 
 import (
-	"errors"
 	"fmt"
 	"github.com/avast/retry-go"
 	log "github.com/sirupsen/logrus"
@@ -70,6 +69,7 @@ type TotalStat struct {
 const DefaultMax = 4
 const DefaultTimeout = 30 * time.Second
 
+// Create new instance of stor client
 func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	client := StorClient{}
 
@@ -106,6 +106,15 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	return &client
 }
 
+func (client *StorClient) Max() int {
+	return client.max
+}
+
+func (client *StorClient) Timeout() time.Duration {
+	return client.timeout
+}
+
+// start stor downloading process
 func (client *StorClient) Start() {
 	for i := 0; i < client.max; i++ {
 		client.wg.Add(1)
@@ -116,10 +125,13 @@ func (client *StorClient) Start() {
 	go client.processStat(client.pool.output, client.total)
 }
 
+// add sha to douwnload queue
 func (client *StorClient) Download(sha string) {
 	client.pool.input <- sha
 }
 
+// wait to all downloads
+// return download stats
 func (client *StorClient) Wait() TotalStat {
 	for i := 0; i < client.max; i++ {
 		client.pool.input <- ""
@@ -192,7 +204,7 @@ func (client *StorClient) downloadFile(filepath string, url string) (size int64,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return 0, errors.New(fmt.Sprintf("Download fail %d (%s)", resp.StatusCode, resp.Status))
+		return 0, fmt.Errorf("Download fail %d (%s)", resp.StatusCode, resp.Status)
 	}
 
 	size, err = io.Copy(out.(io.Writer), resp.Body)
@@ -218,6 +230,7 @@ func (client *StorClient) processStat(downloadStats <-chan DownStat, totalStat c
 	totalStat <- total
 }
 
+// format and print total stats
 func (total TotalStat) Print(startTime time.Time) {
 	var totalSizeMB float64 = (float64)(total.Size / (1024 * 1024))
 	totalDuration := time.Since(startTime)

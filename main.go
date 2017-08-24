@@ -5,6 +5,7 @@ import (
 	"github.com/alecthomas/kingpin"
 	"github.com/avast/stor-client/client"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"regexp"
 	"time"
@@ -37,7 +38,7 @@ func main() {
 	})
 	client.Start()
 
-	shas := readShaFromStdin()
+	shas := readShaFromReader(os.Stdin)
 	for sha := range shas {
 		client.Download(sha)
 	}
@@ -47,12 +48,12 @@ func main() {
 	total.Print(startTime)
 }
 
-func readShaFromStdin() <-chan string {
+func readShaFromReader(rd io.Reader) <-chan string {
 	shas := make(chan string, 32)
 
 	go func() {
 		re := regexp.MustCompile("[a-fA-F0-9]{64}")
-		scanner := bufio.NewScanner(os.Stdin)
+		scanner := bufio.NewScanner(rd)
 		for scanner.Scan() {
 			for _, sha := range re.FindStringSubmatch(scanner.Text()) {
 				shas <- sha
