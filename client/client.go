@@ -205,7 +205,7 @@ func (client *StorClient) downloadFile(filepath string, url string) (size int64,
 	defer func() {
 		err := resp.Body.Close()
 		if err != nil {
-			panic(err)
+			log.Fatalln(err)
 		}
 	}()
 

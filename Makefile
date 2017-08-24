@@ -20,6 +20,10 @@ fmt: ## gofmt and goimports all go files
 	find . -name '*.go' -not -wholename './vendor/*' | while read -r file; do gofmt -w -s "$$file"; goimports -w "$$file"; done
 
 lint: ## Run all the linters
+
+	#https://github.com/golang/go/issues/19490
+	#--enable=vetshadow \
+
 	gometalinter --vendor --disable-all \
 		--enable=deadcode \
 		--enable=ineffassign \
@@ -31,7 +35,6 @@ lint: ## Run all the linters
 		--enable=misspell \
 		--enable=errcheck \
 		--enable=vet \
-		--enable=vetshadow \
 		--deadline=10m \
 		./...
 
