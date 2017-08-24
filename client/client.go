@@ -202,7 +202,12 @@ func (client *StorClient) downloadFile(filepath string, url string) (size int64,
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	if resp.StatusCode != 200 {
 		return 0, fmt.Errorf("Download fail %d (%s)", resp.StatusCode, resp.Status)
@@ -214,7 +219,10 @@ func (client *StorClient) downloadFile(filepath string, url string) (size int64,
 	}
 
 	if !client.devnull {
-		out.(*os.File).Close()
+		err := out.(*os.File).Close()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return size, nil
