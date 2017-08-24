@@ -17,8 +17,6 @@ package storclient
 
 import (
 	"fmt"
-	"github.com/avast/retry-go"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -28,6 +26,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/avast/retry-go"
+	log "github.com/sirupsen/logrus"
 )
 
 type StorClientOpts struct {

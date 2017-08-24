@@ -1,11 +1,12 @@
 package storclient_test
 
 import (
-	"github.com/avast/stor-client/client"
-	"github.com/stretchr/testify/assert"
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/avast/stor-client/client"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewDefault(t *testing.T) {

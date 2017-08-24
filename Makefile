@@ -16,6 +16,9 @@ test: ## Run all the tests
 cover: test ## Run all the tests and opens the coverage report
 	go tool cover -html=coverage.txt
 
+fmt: ## gofmt and goimports all go files
+	find . -name '*.go' -not -wholename './vendor/*' | while read -r file; do gofmt -w -s "$$file"; goimports -w "$$file"; done
+
 lint: ## Run all the linters
 	gometalinter --vendor --disable-all \
 		--enable=deadcode \

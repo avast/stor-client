@@ -2,13 +2,14 @@ package main
 
 import (
 	"bufio"
-	"github.com/alecthomas/kingpin"
-	"github.com/avast/stor-client/client"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/alecthomas/kingpin"
+	"github.com/avast/stor-client/client"
+	log "github.com/sirupsen/logrus"
 )
 
 var version = "master"
