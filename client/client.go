@@ -221,7 +221,7 @@ func (client *StorClient) downloadFile(filepath string, url string) (size int64,
 	if !client.devnull {
 		err := out.(*os.File).Close()
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 	}
 
