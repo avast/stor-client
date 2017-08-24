@@ -13,7 +13,14 @@
 
 [stor](https://github.com/avast/stor) is storage HTTP interface for sha256 files (objects)
 
+## features
+
+* download retry
+* concurent download (default `4`)
+
 ## cli
+
+read (parse) SHA256 from STDIN and download it to `destinationDir`
 
 ```
 echo EE2BF0BFD365EBF829F8D07B197B7A15F39760CD14C6D3BFDFBAD2B145CB72B8 | stor-client --storage http://stor.domain.tld .
