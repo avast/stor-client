@@ -7,4 +7,4 @@ script:
 after_success:
   - bash <(curl -s https://codecov.io/bash)
   - rm coverage.txt
-  - test -n "$TRAVIS_TAG" && gem install fpm && apt-get update && apt-get install rpm && curl -sL http://git.io/goreleaser | bash
+  - test -n "$TRAVIS_TAG" && gem install fpm && sudo apt-get update && sudo apt-get install rpm && curl -sL http://git.io/goreleaser | bash
