@@ -1,0 +1,15 @@
+[[constraint]]
+  name = "github.com/alecthomas/kingpin"
+  version = "2.2.5"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/avast/retry-go"
+
+[[constraint]]
+  name = "github.com/sirupsen/logrus"
+  version = "1.0.3"
+
+[[constraint]]
+  name = "github.com/stretchr/testify"
+  version = "1.1.4"
