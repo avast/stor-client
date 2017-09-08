@@ -91,11 +91,7 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 
 	client.devnull = opts.Devnull
 
-	tr := &http.Transport{
-		MaxIdleConns:    client.max,
-		IdleConnTimeout: client.timeout,
-	}
-	client.httpClient = &http.Client{Transport: tr}
+	client.newHttpClient()
 
 	downloadPool := DownPool{
 		input:  make(chan string, 1024),
@@ -144,6 +140,14 @@ func (client *StorClient) Wait() TotalStat {
 	return <-client.total
 }
 
+func (client *StorClient) newHttpClient() {
+	tr := &http.Transport{
+		MaxIdleConns:    client.max,
+		IdleConnTimeout: client.timeout,
+	}
+	client.httpClient = &http.Client{Transport: tr}
+}
+
 func (client *StorClient) download(shasForDownload <-chan string, downloadedFilesStat chan<- DownStat) {
 	log.Debugln("Start download worker...")
 
@@ -165,13 +169,18 @@ func (client *StorClient) download(shasForDownload <-chan string, downloadedFile
 		startTime := time.Now()
 
 		var size int64
-		err := retry.Retry(
+		err := retry.RetryCustom(
 			func() error {
 				var err error
 				size, err = client.downloadFile(filepath, url)
 
 				return err
 			},
+			func(n uint, err error) {
+				log.Debugf("Retry #%d: %s", n, err)
+				client.newHttpClient()
+			},
+			retry.NewRetryOpts(),
 		)
 
 		downloadDuration := time.Since(startTime)
