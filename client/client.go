@@ -91,8 +91,6 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 
 	client.devnull = opts.Devnull
 
-	client.newHttpClient()
-
 	downloadPool := DownPool{
 		input:  make(chan string, 1024),
 		output: make(chan DownStat, 1024),
@@ -140,18 +138,21 @@ func (client *StorClient) Wait() TotalStat {
 	return <-client.total
 }
 
-func (client *StorClient) newHttpClient() {
+func (client *StorClient) newHttpClient() *http.Client {
 	tr := &http.Transport{
 		MaxIdleConns:    client.max,
 		IdleConnTimeout: client.timeout,
 	}
-	client.httpClient = &http.Client{Transport: tr}
+
+	return &http.Client{Transport: tr}
 }
 
 func (client *StorClient) download(shasForDownload <-chan string, downloadedFilesStat chan<- DownStat) {
 	log.Debugln("Start download worker...")
 
 	defer client.wg.Done()
+
+	httpClient := client.newHttpClient()
 
 	for sha := range shasForDownload {
 		if sha == "" {
@@ -172,13 +173,12 @@ func (client *StorClient) download(shasForDownload <-chan string, downloadedFile
 		err := retry.RetryCustom(
 			func() error {
 				var err error
-				size, err = client.downloadFile(filepath, url)
+				size, err = client.downloadFile(httpClient, filepath, url)
 
 				return err
 			},
 			func(n uint, err error) {
 				log.Debugf("Retry #%d: %s", n, err)
-				client.newHttpClient()
 			},
 			retry.NewRetryOpts(),
 		)
@@ -195,7 +195,7 @@ func (client *StorClient) download(shasForDownload <-chan string, downloadedFile
 	}
 }
 
-func (client *StorClient) downloadFile(filepath string, url string) (size int64, err error) {
+func (client *StorClient) downloadFile(httpClient *http.Client, filepath string, url string) (size int64, err error) {
 	var out interface{}
 
 	if client.devnull {
@@ -207,7 +207,7 @@ func (client *StorClient) downloadFile(filepath string, url string) (size int64,
 		}
 	}
 
-	resp, err := client.httpClient.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return 0, err
 	}
