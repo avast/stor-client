@@ -16,15 +16,11 @@ SYNOPSIS
 package storclient
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
-	"path"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/avast/retry-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -66,6 +62,7 @@ type TotalStat struct {
 	Count int
 }
 
+const workerEnd = ""
 const DefaultMax = 4
 const DefaultTimeout = 30 * time.Second
 
@@ -112,89 +109,14 @@ func (client *StorClient) Timeout() time.Duration {
 func (client *StorClient) Start() {
 	for i := 0; i < client.max; i++ {
 		client.wg.Add(1)
-		go client.download(client.pool.input, client.pool.output)
+		go client.downloadWorker(client.pool.input, client.pool.output)
 	}
 
 	client.total = make(chan TotalStat, 1)
-	go client.processStat(client.pool.output, client.total)
+	go client.processStats(client.pool.output, client.total)
 }
 
-// add sha to douwnload queue
-func (client *StorClient) Download(sha string) {
-	client.pool.input <- sha
-}
-
-// wait to all downloads
-// return download stats
-func (client *StorClient) Wait() TotalStat {
-	for i := 0; i < client.max; i++ {
-		client.pool.input <- ""
-	}
-
-	client.wg.Wait()
-	close(client.pool.output)
-
-	return <-client.total
-}
-
-func (client *StorClient) newHttpClient() *http.Client {
-	tr := &http.Transport{
-		MaxIdleConns:    client.max,
-		IdleConnTimeout: client.timeout,
-	}
-
-	return &http.Client{Transport: tr}
-}
-
-func (client *StorClient) download(shasForDownload <-chan string, downloadedFilesStat chan<- DownStat) {
-	log.Debugln("Start download worker...")
-
-	defer client.wg.Done()
-
-	httpClient := client.newHttpClient()
-
-	for sha := range shasForDownload {
-		if sha == "" {
-			log.Debugln("worker end")
-			return
-		}
-
-		filepath := path.Join(client.downloadDir, sha)
-
-		storage := (client.storageUrl).String()
-		storage = strings.TrimRight(storage, "/")
-
-		url := fmt.Sprintf("%s/%s", storage, sha)
-
-		startTime := time.Now()
-
-		var size int64
-		err := retry.RetryCustom(
-			func() error {
-				var err error
-				size, err = downloadFile(httpClient, filepath, url, client.devnull)
-
-				return err
-			},
-			func(n uint, err error) {
-				log.Debugf("Retry #%d: %s", n, err)
-			},
-			retry.NewRetryOpts(),
-		)
-
-		downloadDuration := time.Since(startTime)
-
-		if err != nil {
-			log.Errorf("Error download %s: %s\n", sha, err)
-			downloadedFilesStat <- DownStat{}
-		} else {
-			log.Debugf("Downloaded %s\n", sha)
-			downloadedFilesStat <- DownStat{Size: size, Duration: downloadDuration}
-		}
-	}
-}
-
-func (client *StorClient) processStat(downloadStats <-chan DownStat, totalStat chan<- TotalStat) {
+func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat chan<- TotalStat) {
 	total := TotalStat{}
 	for stat := range downloadStats {
 		total.Size += stat.Size
@@ -205,13 +127,35 @@ func (client *StorClient) processStat(downloadStats <-chan DownStat, totalStat c
 	totalStat <- total
 }
 
-// format and print total stats
+// add sha to douwnload queue
+func (client *StorClient) Download(sha string) {
+	client.pool.input <- sha
+}
+
+// wait to all downloads
+// return download stats
+func (client *StorClient) Wait() TotalStat {
+	client.sendEndSignalToAllWorkers()
+
+	client.wg.Wait()
+	close(client.pool.output)
+
+	return <-client.total
+}
+
+func (client *StorClient) sendEndSignalToAllWorkers() {
+	for i := 0; i < client.max; i++ {
+		client.pool.input <- workerEnd
+	}
+}
+
+// format and log total stats
 func (total TotalStat) Print(startTime time.Time) {
 	var totalSizeMB float64 = (float64)(total.Size / (1024 * 1024))
 	totalDuration := time.Since(startTime)
 
-	fmt.Printf("total downloaded size: %0.3fMB\n", totalSizeMB)
-	fmt.Printf("total time: %0.3fs\n", totalDuration.Seconds())
-	fmt.Printf("download time: %0.3fs (sum of all downloads => unparallel)\n", total.Duration.Seconds())
-	fmt.Printf("download rate %0.3fMB/s (unparallel rate %0.3fMB/s)\n", totalSizeMB/total.Duration.Seconds(), totalSizeMB/total.Duration.Seconds())
+	log.Printf("total downloaded size: %0.3fMB\n", totalSizeMB)
+	log.Printf("total time: %0.3fs\n", totalDuration.Seconds())
+	log.Printf("download time: %0.3fs (sum of all downloads => unparallel)\n", total.Duration.Seconds())
+	log.Printf("download rate %0.3fMB/s (unparallel rate %0.3fMB/s)\n", totalSizeMB/total.Duration.Seconds(), totalSizeMB/total.Duration.Seconds())
 }
