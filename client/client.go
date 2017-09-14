@@ -17,11 +17,8 @@ package storclient
 
 import (
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strings"
 	"sync"
@@ -32,7 +29,9 @@ import (
 )
 
 type StorClientOpts struct {
-	Max     int
+	//	max size of download pool
+	Max int
+	//	write to devnull instead of file
 	Devnull bool
 	//	connection timeout
 	//
@@ -173,7 +172,7 @@ func (client *StorClient) download(shasForDownload <-chan string, downloadedFile
 		err := retry.RetryCustom(
 			func() error {
 				var err error
-				size, err = client.downloadFile(httpClient, filepath, url)
+				size, err = downloadFile(httpClient, filepath, url, client.devnull)
 
 				return err
 			},
@@ -193,48 +192,6 @@ func (client *StorClient) download(shasForDownload <-chan string, downloadedFile
 			downloadedFilesStat <- DownStat{Size: size, Duration: downloadDuration}
 		}
 	}
-}
-
-func (client *StorClient) downloadFile(httpClient *http.Client, filepath string, url string) (size int64, err error) {
-	var out interface{}
-
-	if client.devnull {
-		out = ioutil.Discard
-	} else {
-		out, err = os.Create(filepath)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}()
-
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("Download fail %d (%s)", resp.StatusCode, resp.Status)
-	}
-
-	size, err = io.Copy(out.(io.Writer), resp.Body)
-	if err != nil {
-		return 0, err
-	}
-
-	if !client.devnull {
-		err := out.(*os.File).Close()
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	return size, nil
 }
 
 func (client *StorClient) processStat(downloadStats <-chan DownStat, totalStat chan<- TotalStat) {
