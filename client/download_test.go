@@ -29,17 +29,19 @@ func (c *clientMock) Get(url string) (*http.Response, error) {
 	return &http.Response{StatusCode: c.statusCode, Status: c.status, Body: body}, nil
 }
 
+//const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
 func TestDownloadFile(t *testing.T) {
 	client := &clientMock{}
 
-	_, err := downloadFile(client, "/tmp/a", "http://blabla", true)
+	_, err := downloadFile(client, "/tmp/a", "http://blabla", true, emptyHash)
 	assert.Error(t, err)
 
 	client = &clientMock{statusCode: 200, status: "OK"}
-	_, err = downloadFile(client, "/tmp/a", "http://blabla", true)
+	_, err = downloadFile(client, "/tmp/a", "http://blabla", true, emptyHash)
 	assert.NoError(t, err)
 
 	client = &clientMock{statusCode: 200, status: "OK"}
-	_, err = downloadFile(client, "/tmp/a", "http://blabla", false)
+	_, err = downloadFile(client, "/tmp/a", "http://blabla", false, emptyHash)
 	assert.NoError(t, err)
 }
