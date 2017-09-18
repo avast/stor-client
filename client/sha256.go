@@ -33,7 +33,7 @@ func BytesToSha256(bytes []byte) (Sha256, error) {
 	}
 
 	for _, b := range bytes {
-		if b < 0 || b > 0xff {
+		if b > 0xff {
 			return nil, errors.New("Sha256 must contains only 0-FF bytes")
 		}
 	}
