@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/avast/hashutil-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -36,7 +37,7 @@ type StorClientOpts struct {
 }
 
 type DownPool struct {
-	input  chan string
+	input  chan hashutil.Hash
 	output chan DownStat
 }
 
@@ -62,7 +63,8 @@ type TotalStat struct {
 	Count int
 }
 
-const workerEnd = ""
+var workerEnd hashutil.Hash = hashutil.Hash{}
+
 const DefaultMax = 4
 const DefaultTimeout = 30 * time.Second
 
@@ -88,7 +90,7 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	client.devnull = opts.Devnull
 
 	downloadPool := DownPool{
-		input:  make(chan string, 1024),
+		input:  make(chan hashutil.Hash, 1024),
 		output: make(chan DownStat, 1024),
 	}
 
@@ -107,9 +109,9 @@ func (client *StorClient) Timeout() time.Duration {
 
 // start stor downloading process
 func (client *StorClient) Start() {
-	for i := 0; i < client.max; i++ {
+	for id := 0; id < client.max; id++ {
 		client.wg.Add(1)
-		go client.downloadWorker(client.pool.input, client.pool.output)
+		go client.downloadWorker(id, client.pool.input, client.pool.output)
 	}
 
 	client.total = make(chan TotalStat, 1)
@@ -128,7 +130,7 @@ func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat 
 }
 
 // add sha to douwnload queue
-func (client *StorClient) Download(sha string) {
+func (client *StorClient) Download(sha hashutil.Hash) {
 	client.pool.input <- sha
 }
 
@@ -154,8 +156,12 @@ func (total TotalStat) Print(startTime time.Time) {
 	var totalSizeMB float64 = (float64)(total.Size / (1024 * 1024))
 	totalDuration := time.Since(startTime)
 
-	log.Printf("total downloaded size: %0.3fMB\n", totalSizeMB)
-	log.Printf("total time: %0.3fs\n", totalDuration.Seconds())
-	log.Printf("download time: %0.3fs (sum of all downloads => unparallel)\n", total.Duration.Seconds())
-	log.Printf("download rate %0.3fMB/s (unparallel rate %0.3fMB/s)\n", totalSizeMB/total.Duration.Seconds(), totalSizeMB/total.Duration.Seconds())
+	log.Infof(
+		"total downloaded size: %0.3fMB\ntotal time: %0.3fs\ndownload time: %0.3fs (sum of all downloads => unparallel)\ndownload rate %0.3fMB/s (unparallel rate %0.3fMB/s)\n",
+		totalSizeMB,
+		totalDuration.Seconds(),
+		total.Duration.Seconds(),
+		totalSizeMB/total.Duration.Seconds(),
+		totalSizeMB/total.Duration.Seconds(),
+	)
 }

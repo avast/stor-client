@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"io"
 	"os"
 	"regexp"
 	"time"
 
 	"github.com/alecthomas/kingpin"
+	"github.com/avast/hashutil-go"
 	"github.com/avast/stor-client/client"
 	log "github.com/sirupsen/logrus"
 )
@@ -21,6 +23,7 @@ var (
 	devnull     = kingpin.Flag("devnull", "download file to /dev/null").Bool()
 	verbose     = kingpin.Flag("verbose", "more talkativ output").Short('v').Bool()
 	timeout     = kingpin.Flag("timeout", "connetion timeout").Default(storclient.DefaultTimeout.String()).Duration()
+	logJson     = kingpin.Flag("json", "log in json format").Bool()
 )
 
 func main() {
@@ -29,6 +32,10 @@ func main() {
 
 	if *verbose {
 		log.SetLevel(log.DebugLevel)
+	}
+
+	if *logJson {
+		log.SetFormatter(&log.JSONFormatter{})
 	}
 
 	startTime := time.Now()
@@ -40,8 +47,13 @@ func main() {
 	client.Start()
 
 	shas := readShaFromReader(os.Stdin)
-	for sha := range shas {
-		client.Download(sha)
+	for shaHexStr := range shas {
+
+		if hash, err := hashutil.StringToHash(sha256.New(), shaHexStr); err == nil {
+			client.Download(hash)
+		} else {
+			log.Error("Invalid sha256: ", err)
+		}
 	}
 
 	total := client.Wait()
