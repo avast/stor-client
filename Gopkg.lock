@@ -32,6 +32,12 @@
   revision = "8ea1249ed2dd5600287db23bd410aaecd8c65678"
 
 [[projects]]
+  name = "github.com/creasty/defaults"
+  packages = ["."]
+  revision = "79c39719194bbe3c1a00f7909871aeac028849bf"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
@@ -70,6 +76,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "085e785e05d2165acabc68444d27558869a2b31e82997499d3d028ae24312dc9"
+  inputs-digest = "d1762578aa10421f6d1793b9630f6e1970245dcd69e837c7b63b605918365435"
   solver-name = "gps-cdcl"
   solver-version = 1

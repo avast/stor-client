@@ -73,7 +73,7 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 		err := retry.RetryCustom(
 			func() error {
 				var err error
-				size, err = downloadFile(httpClient, filepath, client.createUrl(sha), client.devnull, sha)
+				size, err = downloadFile(httpClient, filepath, client.createUrl(sha), client.Devnull, sha)
 
 				return err
 			},
@@ -84,7 +84,7 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 					//}).WithFields(err.(logFieldsError).LogFields()).Debugf("Retry #%d: %s", n, err)
 				}).Debugf("Retry #%d: %s", n, err)
 			},
-			retry.NewRetryOpts(),
+			retry.NewRetryOpts().Delay(client.RetryDelay).Tries(client.RetryTries).Units(1),
 		)
 
 		downloadDuration := time.Since(startTime)
@@ -108,8 +108,8 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 
 func (client *StorClient) newHttpClient() *http.Client {
 	tr := &http.Transport{
-		MaxIdleConns:    client.max,
-		IdleConnTimeout: client.timeout,
+		MaxIdleConns:    client.Max,
+		IdleConnTimeout: client.Timeout,
 	}
 
 	return &http.Client{Transport: tr}
@@ -165,7 +165,7 @@ func downloadFile(httpClient httpClient, filepath string, url string, devnull bo
 		}
 	}
 
-	downSha256, err := hashutil.BytesToHash(sha256.New(), hasher.Sum([]byte{0}))
+	downSha256, err := hashutil.BytesToHash(sha256.New(), hasher.Sum(nil))
 	if err != nil {
 		return 0, err
 	}

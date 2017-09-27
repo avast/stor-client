@@ -1,10 +1,12 @@
 package storclient
 
 import (
+	"crypto/sha256"
 	"io"
 	"net/http"
 	"testing"
 
+	"github.com/avast/hashutil-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +31,7 @@ func (c *clientMock) Get(url string) (*http.Response, error) {
 	return &http.Response{StatusCode: c.statusCode, Status: c.status, Body: body}, nil
 }
 
-//const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+var emptyHash = hashutil.EmptyHash(sha256.New())
 
 func TestDownloadFile(t *testing.T) {
 	client := &clientMock{}

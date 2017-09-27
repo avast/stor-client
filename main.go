@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/alecthomas/kingpin"
@@ -19,11 +20,13 @@ var version = "master"
 var (
 	storageUrl  = kingpin.Flag("storage", "storage url").Short('u').Default("http://stor.whale.int.avast.com").URL()
 	downloadDir = kingpin.Arg("downloadDir", "directory for downloaded files").Required().String()
-	max         = kingpin.Flag("max", "max download process").Default("4").Int()
+	max         = kingpin.Flag("max", "max download process").Default(strconv.Itoa(storclient.DefaultMax)).Int()
 	devnull     = kingpin.Flag("devnull", "download file to /dev/null").Bool()
 	verbose     = kingpin.Flag("verbose", "more talkativ output").Short('v').Bool()
 	timeout     = kingpin.Flag("timeout", "connetion timeout").Default(storclient.DefaultTimeout.String()).Duration()
 	logJson     = kingpin.Flag("json", "log in json format").Bool()
+	retryDelay  = kingpin.Flag("delay", "exponential retry - start delay time").Default(storclient.DefaultRetryDelay.String()).Duration()
+	retryTries  = kingpin.Flag("tries", "count of tries of retry").Default(strconv.Itoa(storclient.DefaultRetryTries)).Uint()
 )
 
 func main() {
@@ -40,9 +43,11 @@ func main() {
 
 	startTime := time.Now()
 	client := storclient.New(**storageUrl, *downloadDir, storclient.StorClientOpts{
-		Max:     *max,
-		Devnull: *devnull,
-		Timeout: *timeout,
+		Max:        *max,
+		Devnull:    *devnull,
+		Timeout:    *timeout,
+		RetryDelay: *retryDelay,
+		RetryTries: *retryTries,
 	})
 	client.Start()
 

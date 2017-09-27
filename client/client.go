@@ -34,7 +34,20 @@ type StorClientOpts struct {
 	//
 	//	-1 means no limit (no timeout)
 	Timeout time.Duration
+	// exponential retry - start delay time
+	// default is 10e5 microseconds
+	RetryDelay time.Duration
+	// count of tries of retry
+	// default is 10
+	RetryTries uint
 }
+
+const (
+	DefaultMax        = 4
+	DefaultTimeout    = 30 * time.Second
+	DefaultRetryTries = 10
+	DefaultRetryDelay = 1e5 * time.Microsecond
+)
 
 type DownPool struct {
 	input  chan hashutil.Hash
@@ -42,15 +55,13 @@ type DownPool struct {
 }
 
 type StorClient struct {
-	max         int
 	downloadDir string
 	storageUrl  url.URL
-	devnull     bool
 	pool        DownPool
 	httpClient  *http.Client
-	timeout     time.Duration
 	total       chan TotalStat
 	wg          sync.WaitGroup
+	StorClientOpts
 }
 
 type DownStat struct {
@@ -65,9 +76,6 @@ type TotalStat struct {
 
 var workerEnd hashutil.Hash = hashutil.Hash{}
 
-const DefaultMax = 4
-const DefaultTimeout = 30 * time.Second
-
 // Create new instance of stor client
 func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	client := StorClient{}
@@ -75,19 +83,31 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	client.storageUrl = storUrl
 	client.downloadDir = downloadDir
 
-	client.max = DefaultMax
+	client.Max = DefaultMax
 	if opts.Max != 0 {
-		client.max = opts.Max
+		client.Max = opts.Max
 	}
 
-	client.timeout = DefaultTimeout
+	client.Timeout = DefaultTimeout
 	if opts.Timeout == -1 {
-		client.timeout = 0
+		client.Timeout = 0
 	} else if opts.Timeout != 0 {
-		client.timeout = opts.Timeout
+		client.Timeout = opts.Timeout
 	}
 
-	client.devnull = opts.Devnull
+	client.Devnull = opts.Devnull
+
+	if opts.RetryDelay == 0 {
+		client.RetryDelay = DefaultRetryDelay
+	} else {
+		client.RetryDelay = opts.RetryDelay
+	}
+
+	if opts.RetryTries == 0 {
+		client.RetryTries = DefaultRetryTries
+	} else {
+		client.RetryTries = opts.RetryTries
+	}
 
 	downloadPool := DownPool{
 		input:  make(chan hashutil.Hash, 1024),
@@ -99,17 +119,9 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	return &client
 }
 
-func (client *StorClient) Max() int {
-	return client.max
-}
-
-func (client *StorClient) Timeout() time.Duration {
-	return client.timeout
-}
-
 // start stor downloading process
 func (client *StorClient) Start() {
-	for id := 0; id < client.max; id++ {
+	for id := 0; id < client.Max; id++ {
 		client.wg.Add(1)
 		go client.downloadWorker(id, client.pool.input, client.pool.output)
 	}
@@ -146,7 +158,7 @@ func (client *StorClient) Wait() TotalStat {
 }
 
 func (client *StorClient) sendEndSignalToAllWorkers() {
-	for i := 0; i < client.max; i++ {
+	for i := 0; i < client.Max; i++ {
 		client.pool.input <- workerEnd
 	}
 }

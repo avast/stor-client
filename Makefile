@@ -9,8 +9,16 @@ setup: ## Install all the build and lint dependencies
 	go get -u golang.org/x/tools/cmd/cover
 	dep ensure
 	gometalinter --install
+	go get -u github.com/robertkrimen/godocdown/godocdown
 
-test: ## Run all the tests
+generate: ## Generate README.md
+	godocdown >| RDME.md
+	#export HELP=$$(go run main.go --help 2>&1)
+	#echo $$HELP
+	#sed -i "s/HELP_PLACEHOLDER/$${HELP}/" RDME.md
+	godocdown client >| client/README.md
+
+test: generate ## Run all the tests
 	gotestcover $(TEST_OPTIONS) -covermode=atomic -coverprofile=coverage.txt $(SOURCE_FILES) -run $(TEST_PATTERN) -timeout=2m
 
 cover: test ## Run all the tests and opens the coverage report
@@ -40,7 +48,7 @@ lint: ## Run all the linters
 
 ci: test lint  ## Run all the tests and code checks
 
-build:
+build: ## Build the app
 	go build
 
 # Absolutely awesome: http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
