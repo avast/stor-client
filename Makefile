@@ -1,6 +1,7 @@
 SOURCE_FILES?=$$(go list ./... | grep -v /vendor/)
 TEST_PATTERN?=.
 TEST_OPTIONS?=
+HELP?=$$(go run main.go --help 2>&1)
 
 setup: ## Install all the build and lint dependencies
 	go get -u github.com/alecthomas/gometalinter
@@ -13,9 +14,7 @@ setup: ## Install all the build and lint dependencies
 
 generate: ## Generate README.md
 	godocdown >| RDME.md
-	#export HELP=$$(go run main.go --help 2>&1)
-	#echo $$HELP
-	#sed -i "s/HELP_PLACEHOLDER/$${HELP}/" RDME.md
+	#sed -i 's/HELP_PLACEHOLDER/$(HELP)/' RDME.md
 	godocdown client >| client/README.md
 
 test: generate ## Run all the tests
