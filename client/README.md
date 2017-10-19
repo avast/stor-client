@@ -120,3 +120,10 @@ type TotalStat struct {
 func (total TotalStat) Print(startTime time.Time)
 ```
 format and log total stats
+
+#### func (TotalStat) Status
+
+```go
+func (total TotalStat) Status() bool
+```
+Status return true if all files are downloaded

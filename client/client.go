@@ -55,12 +55,13 @@ type DownPool struct {
 }
 
 type StorClient struct {
-	downloadDir string
-	storageUrl  url.URL
-	pool        DownPool
-	httpClient  *http.Client
-	total       chan TotalStat
-	wg          sync.WaitGroup
+	downloadDir           string
+	storageUrl            url.URL
+	pool                  DownPool
+	httpClient            *http.Client
+	total                 chan TotalStat
+	wg                    sync.WaitGroup
+	expectedDownloadCount int
 	StorClientOpts
 }
 
@@ -71,7 +72,8 @@ type DownStat struct {
 
 type TotalStat struct {
 	DownStat
-	Count int
+	Count                 int
+	expectedDownloadCount int
 }
 
 var workerEnd hashutil.Hash = hashutil.Hash{}
@@ -131,7 +133,7 @@ func (client *StorClient) Start() {
 }
 
 func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat chan<- TotalStat) {
-	total := TotalStat{}
+	total := TotalStat{expectedDownloadCount: client.expectedDownloadCount}
 	for stat := range downloadStats {
 		total.Size += stat.Size
 		total.Duration += stat.Duration
@@ -143,6 +145,7 @@ func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat 
 
 // add sha to douwnload queue
 func (client *StorClient) Download(sha hashutil.Hash) {
+	client.expectedDownloadCount++
 	client.pool.input <- sha
 }
 
@@ -176,4 +179,12 @@ func (total TotalStat) Print(startTime time.Time) {
 		totalSizeMB/total.Duration.Seconds(),
 		totalSizeMB/total.Duration.Seconds(),
 	)
+}
+
+// Status return true if all files are downloaded
+func (total TotalStat) Status() bool {
+	if total.Count == total.expectedDownloadCount {
+		return true
+	}
+	return false
 }

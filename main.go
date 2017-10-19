@@ -64,6 +64,10 @@ func main() {
 	total := client.Wait()
 
 	total.Print(startTime)
+
+	if !total.Status() {
+		os.Exit(1)
+	}
 }
 
 func readShaFromReader(rd io.Reader) <-chan string {
