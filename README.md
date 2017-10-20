@@ -27,6 +27,28 @@ read (parse) SHA256 from STDIN and download it to `destinationDir`
 echo EE2BF0BFD365EBF829F8D07B197B7A15F39760CD14C6D3BFDFBAD2B145CB72B8 | stor-client --storage http://stor.domain.tld .
 ```
 
+### help
+
+```
+usage: stor-client [<flags>] <downloadDir>
+
+Flags:
+      --help         Show context-sensitive help (also try --help-long and --help-man).
+  -u, --storage=http://stor.whale.int.avast.com
+                     storage url
+      --max=4        max download process
+      --devnull      download file to /dev/null
+  -v, --verbose      more talkativ output
+      --timeout=30s  connetion timeout
+      --json         log in json format
+      --delay=100ms  exponential retry - start delay time
+      --tries=10     count of tries of retry
+      --version      Show application version.
+
+Args:
+  <downloadDir>  directory for downloaded files
+```
+
 ## golang client
 
 async example
