@@ -14,10 +14,10 @@ func TestNewDefault(t *testing.T) {
 
 	client := storclient.New(*url, "some_dir", storclient.StorClientOpts{})
 
-	assert.Equal(t, client.Max(), 4)
+	assert.Equal(t, client.Max, 4)
 
 	expectedTimeout, _ := time.ParseDuration("30s")
-	assert.Equal(t, client.Timeout(), expectedTimeout)
+	assert.Equal(t, client.Timeout, expectedTimeout)
 }
 
 func TestNewInfinityTimeout(t *testing.T) {
@@ -26,5 +26,5 @@ func TestNewInfinityTimeout(t *testing.T) {
 	client := storclient.New(*url, "some_dir", storclient.StorClientOpts{Timeout: -1})
 
 	expectedTimeout, _ := time.ParseDuration("0s")
-	assert.Equal(t, client.Timeout(), expectedTimeout)
+	assert.Equal(t, client.Timeout, expectedTimeout)
 }

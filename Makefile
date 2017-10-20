@@ -1,17 +1,20 @@
-SOURCE_FILES?=$$(go list ./... | grep -v /vendor/)
-TEST_PATTERN?=.
-TEST_OPTIONS?=
+HELP?=$$(go run main.go --help 2>&1)
 
 setup: ## Install all the build and lint dependencies
 	go get -u github.com/alecthomas/gometalinter
 	go get -u github.com/golang/dep/cmd/dep
-	go get -u github.com/pierrre/gotestcover
 	go get -u golang.org/x/tools/cmd/cover
 	dep ensure
 	gometalinter --install
+	go get -u github.com/robertkrimen/godocdown/godocdown
 
-test: ## Run all the tests
-	gotestcover $(TEST_OPTIONS) -covermode=atomic -coverprofile=coverage.txt $(SOURCE_FILES) -run $(TEST_PATTERN) -timeout=2m
+generate: ## Generate README.md
+	#godocdown >| RDME.md
+	#sed -i 's/HELP_PLACEHOLDER/$(HELP)/' RDME.md
+	godocdown client >| client/README.md
+
+test: generate ## Run all the tests
+	echo 'mode: atomic' > coverage.txt && go list ./... | grep -v vendor | xargs -n1 -I{} sh -c 'go test -covermode=atomic -coverprofile=coverage.tmp {} && tail -n +2 coverage.tmp >> coverage.txt' && rm coverage.tmp
 
 cover: test ## Run all the tests and opens the coverage report
 	go tool cover -html=coverage.txt
@@ -40,7 +43,7 @@ lint: ## Run all the linters
 
 ci: test lint  ## Run all the tests and code checks
 
-build:
+build: ## Build the app
 	go build
 
 # Absolutely awesome: http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html

@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  branch = "implementation"
+  name = "github.com/JaSei/pathutil-go"
+  packages = ["."]
+  revision = "64c27b032b369c60f3758bff93addb05afc5f6d7"
+
+[[projects]]
   name = "github.com/alecthomas/kingpin"
   packages = ["."]
   revision = "1087e65c9441605df944fb12c33f0fe7072d18ca"
@@ -18,6 +24,12 @@
   name = "github.com/alecthomas/units"
   packages = ["."]
   revision = "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a"
+
+[[projects]]
+  name = "github.com/avast/hashutil-go"
+  packages = ["."]
+  revision = "3ca2dd77abda177ee87acda1dc31db457efc6502"
+  version = "1.0.0"
 
 [[projects]]
   branch = "master"
@@ -64,6 +76,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b130d10586a2e81cddfba105b6e4c56d2daa696294a0c1c4c0c592ad47abd289"
+  inputs-digest = "3842dc864bafaaceae943f529849bb21f52ea706c3c0f0b9b948550b22687ab5"
   solver-name = "gps-cdcl"
   solver-version = 1

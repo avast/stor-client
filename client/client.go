@@ -16,45 +16,53 @@ SYNOPSIS
 package storclient
 
 import (
-	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
-	"path"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/avast/retry-go"
+	"github.com/avast/hashutil-go"
 	log "github.com/sirupsen/logrus"
 )
 
 type StorClientOpts struct {
-	Max     int
+	//	max size of download pool
+	Max int
+	//	write to devnull instead of file
 	Devnull bool
 	//	connection timeout
 	//
 	//	-1 means no limit (no timeout)
 	Timeout time.Duration
+	// exponential retry - start delay time
+	// default is 10e5 microseconds
+	RetryDelay time.Duration
+	// count of tries of retry
+	// default is 10
+	RetryTries uint
 }
 
+const (
+	DefaultMax        = 4
+	DefaultTimeout    = 30 * time.Second
+	DefaultRetryTries = 10
+	DefaultRetryDelay = 1e5 * time.Microsecond
+)
+
 type DownPool struct {
-	input  chan string
+	input  chan hashutil.Hash
 	output chan DownStat
 }
 
 type StorClient struct {
-	max         int
-	downloadDir string
-	storageUrl  url.URL
-	devnull     bool
-	pool        DownPool
-	httpClient  *http.Client
-	timeout     time.Duration
-	total       chan TotalStat
-	wg          sync.WaitGroup
+	downloadDir           string
+	storageUrl            url.URL
+	pool                  DownPool
+	httpClient            *http.Client
+	total                 chan TotalStat
+	wg                    sync.WaitGroup
+	expectedDownloadCount int
+	StorClientOpts
 }
 
 type DownStat struct {
@@ -64,11 +72,11 @@ type DownStat struct {
 
 type TotalStat struct {
 	DownStat
-	Count int
+	Count                 int
+	expectedDownloadCount int
 }
 
-const DefaultMax = 4
-const DefaultTimeout = 30 * time.Second
+var workerEnd hashutil.Hash = hashutil.Hash{}
 
 // Create new instance of stor client
 func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
@@ -77,28 +85,34 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	client.storageUrl = storUrl
 	client.downloadDir = downloadDir
 
-	client.max = DefaultMax
+	client.Max = DefaultMax
 	if opts.Max != 0 {
-		client.max = opts.Max
+		client.Max = opts.Max
 	}
 
-	client.timeout = DefaultTimeout
+	client.Timeout = DefaultTimeout
 	if opts.Timeout == -1 {
-		client.timeout = 0
+		client.Timeout = 0
 	} else if opts.Timeout != 0 {
-		client.timeout = opts.Timeout
+		client.Timeout = opts.Timeout
 	}
 
-	client.devnull = opts.Devnull
+	client.Devnull = opts.Devnull
 
-	tr := &http.Transport{
-		MaxIdleConns:    client.max,
-		IdleConnTimeout: client.timeout,
+	if opts.RetryDelay == 0 {
+		client.RetryDelay = DefaultRetryDelay
+	} else {
+		client.RetryDelay = opts.RetryDelay
 	}
-	client.httpClient = &http.Client{Transport: tr}
+
+	if opts.RetryTries == 0 {
+		client.RetryTries = DefaultRetryTries
+	} else {
+		client.RetryTries = opts.RetryTries
+	}
 
 	downloadPool := DownPool{
-		input:  make(chan string, 1024),
+		input:  make(chan hashutil.Hash, 1024),
 		output: make(chan DownStat, 1024),
 	}
 
@@ -107,129 +121,19 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	return &client
 }
 
-func (client *StorClient) Max() int {
-	return client.max
-}
-
-func (client *StorClient) Timeout() time.Duration {
-	return client.timeout
-}
-
 // start stor downloading process
 func (client *StorClient) Start() {
-	for i := 0; i < client.max; i++ {
+	for id := 0; id < client.Max; id++ {
 		client.wg.Add(1)
-		go client.download(client.pool.input, client.pool.output)
+		go client.downloadWorker(id, client.pool.input, client.pool.output)
 	}
 
 	client.total = make(chan TotalStat, 1)
-	go client.processStat(client.pool.output, client.total)
+	go client.processStats(client.pool.output, client.total)
 }
 
-// add sha to douwnload queue
-func (client *StorClient) Download(sha string) {
-	client.pool.input <- sha
-}
-
-// wait to all downloads
-// return download stats
-func (client *StorClient) Wait() TotalStat {
-	for i := 0; i < client.max; i++ {
-		client.pool.input <- ""
-	}
-
-	client.wg.Wait()
-	close(client.pool.output)
-
-	return <-client.total
-}
-
-func (client *StorClient) download(shasForDownload <-chan string, downloadedFilesStat chan<- DownStat) {
-	log.Debugln("Start download worker...")
-
-	defer client.wg.Done()
-
-	for sha := range shasForDownload {
-		if sha == "" {
-			log.Debugln("worker end")
-			return
-		}
-
-		filepath := path.Join(client.downloadDir, sha)
-
-		storage := (client.storageUrl).String()
-		storage = strings.TrimRight(storage, "/")
-
-		url := fmt.Sprintf("%s/%s", storage, sha)
-
-		startTime := time.Now()
-
-		var size int64
-		err := retry.Retry(
-			func() error {
-				var err error
-				size, err = client.downloadFile(filepath, url)
-
-				return err
-			},
-		)
-
-		downloadDuration := time.Since(startTime)
-
-		if err != nil {
-			log.Errorf("Error download %s: %s\n", sha, err)
-			downloadedFilesStat <- DownStat{}
-		} else {
-			log.Debugf("Downloaded %s\n", sha)
-			downloadedFilesStat <- DownStat{Size: size, Duration: downloadDuration}
-		}
-	}
-}
-
-func (client *StorClient) downloadFile(filepath string, url string) (size int64, err error) {
-	var out interface{}
-
-	if client.devnull {
-		out = ioutil.Discard
-	} else {
-		out, err = os.Create(filepath)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	resp, err := client.httpClient.Get(url)
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}()
-
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("Download fail %d (%s)", resp.StatusCode, resp.Status)
-	}
-
-	size, err = io.Copy(out.(io.Writer), resp.Body)
-	if err != nil {
-		return 0, err
-	}
-
-	if !client.devnull {
-		err := out.(*os.File).Close()
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	return size, nil
-}
-
-func (client *StorClient) processStat(downloadStats <-chan DownStat, totalStat chan<- TotalStat) {
-	total := TotalStat{}
+func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat chan<- TotalStat) {
+	total := TotalStat{expectedDownloadCount: client.expectedDownloadCount}
 	for stat := range downloadStats {
 		total.Size += stat.Size
 		total.Duration += stat.Duration
@@ -239,13 +143,45 @@ func (client *StorClient) processStat(downloadStats <-chan DownStat, totalStat c
 	totalStat <- total
 }
 
-// format and print total stats
+// add sha to douwnload queue
+func (client *StorClient) Download(sha hashutil.Hash) {
+	client.expectedDownloadCount++
+	client.pool.input <- sha
+}
+
+// wait to all downloads
+// return download stats
+func (client *StorClient) Wait() TotalStat {
+	client.sendEndSignalToAllWorkers()
+
+	client.wg.Wait()
+	close(client.pool.output)
+
+	return <-client.total
+}
+
+func (client *StorClient) sendEndSignalToAllWorkers() {
+	for i := 0; i < client.Max; i++ {
+		client.pool.input <- workerEnd
+	}
+}
+
+// format and log total stats
 func (total TotalStat) Print(startTime time.Time) {
 	var totalSizeMB float64 = (float64)(total.Size / (1024 * 1024))
 	totalDuration := time.Since(startTime)
 
-	fmt.Printf("total downloaded size: %0.3fMB\n", totalSizeMB)
-	fmt.Printf("total time: %0.3fs\n", totalDuration.Seconds())
-	fmt.Printf("download time: %0.3fs (sum of all downloads => unparallel)\n", total.Duration.Seconds())
-	fmt.Printf("download rate %0.3fMB/s (unparallel rate %0.3fMB/s)\n", totalSizeMB/total.Duration.Seconds(), totalSizeMB/total.Duration.Seconds())
+	log.Infof(
+		"total downloaded size: %0.3fMB\ntotal time: %0.3fs\ndownload time: %0.3fs (sum of all downloads => unparallel)\ndownload rate %0.3fMB/s (unparallel rate %0.3fMB/s)\n",
+		totalSizeMB,
+		totalDuration.Seconds(),
+		total.Duration.Seconds(),
+		totalSizeMB/total.Duration.Seconds(),
+		totalSizeMB/total.Duration.Seconds(),
+	)
+}
+
+// Status return true if all files are downloaded
+func (total TotalStat) Status() bool {
+	return total.Count == total.expectedDownloadCount
 }
