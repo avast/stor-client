@@ -183,8 +183,5 @@ func (total TotalStat) Print(startTime time.Time) {
 
 // Status return true if all files are downloaded
 func (total TotalStat) Status() bool {
-	if total.Count == total.expectedDownloadCount {
-		return true
-	}
-	return false
+	return total.Count == total.expectedDownloadCount
 }
