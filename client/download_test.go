@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/JaSei/pathutil-go"
 	"github.com/avast/hashutil-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -36,14 +37,23 @@ var emptyHash = hashutil.EmptyHash(sha256.New())
 func TestDownloadFile(t *testing.T) {
 	client := &clientMock{}
 
-	_, err := downloadFile(client, "/tmp/a", "http://blabla", true, emptyHash)
+	path, err := pathutil.NewTempFile(pathutil.TempFileOpt{})
+	assert.NoError(t, err)
+	assert.NoError(t, path.Remove())
+
+	_, err = downloadFile(client, path.Canonpath(), "http://blabla", true, emptyHash)
 	assert.Error(t, err)
 
 	client = &clientMock{statusCode: 200, status: "OK"}
-	_, err = downloadFile(client, "/tmp/a", "http://blabla", true, emptyHash)
+	_, err = downloadFile(client, path.Canonpath(), "http://blabla", true, emptyHash)
 	assert.NoError(t, err)
+	if !assert.False(t, path.Exists(), "Downloaded file not exists, becauase /dev/null") {
+		t.Log(path)
+	}
 
 	client = &clientMock{statusCode: 200, status: "OK"}
-	_, err = downloadFile(client, "/tmp/a", "http://blabla", false, emptyHash)
+	_, err = downloadFile(client, path.Canonpath(), "http://blabla", false, emptyHash)
 	assert.NoError(t, err)
+	assert.True(t, path.Exists(), "Downloaded file exists")
+	assert.NoError(t, path.Remove())
 }

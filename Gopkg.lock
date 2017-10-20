@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  branch = "implementation"
+  name = "github.com/JaSei/pathutil-go"
+  packages = ["."]
+  revision = "64c27b032b369c60f3758bff93addb05afc5f6d7"
+
+[[projects]]
   name = "github.com/alecthomas/kingpin"
   packages = ["."]
   revision = "1087e65c9441605df944fb12c33f0fe7072d18ca"
@@ -70,6 +76,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "085e785e05d2165acabc68444d27558869a2b31e82997499d3d028ae24312dc9"
+  inputs-digest = "3842dc864bafaaceae943f529849bb21f52ea706c3c0f0b9b948550b22687ab5"
   solver-name = "gps-cdcl"
   solver-version = 1
