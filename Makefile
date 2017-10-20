@@ -9,7 +9,7 @@ setup: ## Install all the build and lint dependencies
 	go get -u github.com/robertkrimen/godocdown/godocdown
 
 generate: ## Generate README.md
-	godocdown >| RDME.md
+	#godocdown >| RDME.md
 	#sed -i 's/HELP_PLACEHOLDER/$(HELP)/' RDME.md
 	godocdown client >| client/README.md
 

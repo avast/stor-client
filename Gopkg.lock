@@ -20,10 +20,10 @@
   revision = "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a"
 
 [[projects]]
-  branch = "more_generic_hashutil"
   name = "github.com/avast/hashutil-go"
   packages = ["."]
-  revision = "949bd4a5623f204aa886bff6f69cc56d9a1ae1bf"
+  revision = "3ca2dd77abda177ee87acda1dc31db457efc6502"
+  version = "1.0.0"
 
 [[projects]]
   branch = "master"

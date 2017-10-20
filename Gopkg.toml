@@ -16,4 +16,4 @@
 
 [[constraint]]
   name = "github.com/avast/hashutil-go"
-  branch = "more_generic_hashutil"
+  version = "1.0.0"
