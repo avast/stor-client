@@ -2,7 +2,8 @@
 
 [![Release](https://img.shields.io/github/release/avast/stor-client.svg?style=flat-square)](https://github.com/avast/stor-client/releases/latest)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE.md)
-[![Travis](https://img.shields.io/travis/avast/stor-client.svg?style=flat-square)](https://travis-ci.org/avast/stor-client)
+[![Linux build status](https://img.shields.io/travis/avast/stor-client.svg?style=flat-square)](https://travis-ci.org/avast/stor-client)
+[![Windows build status](https://ci.appveyor.com/api/projects/status/ab1v3564faurx8ad?svg=true)](https://ci.appveyor.com/project/JaSei/stor-client)
 [![Go Report Card](https://goreportcard.com/badge/github.com/avast/stor-client?style=flat-square)](https://goreportcard.com/report/github.com/avast/stor-client)
 [![GoDoc](https://godoc.org/github.com/avast/stor-client?status.svg&style=flat-square)](http://godoc.org/github.com/avast/stor-client)
 [![Powered By: GoReleaser](https://img.shields.io/badge/powered%20by-goreleaser-green.svg?style=flat-square)](https://github.com/goreleaser)
