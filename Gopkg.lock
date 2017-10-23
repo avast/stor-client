@@ -5,7 +5,7 @@
   branch = "implementation"
   name = "github.com/JaSei/pathutil-go"
   packages = ["."]
-  revision = "64c27b032b369c60f3758bff93addb05afc5f6d7"
+  revision = "f48cf8da27f47b06e71b3237925021308d8bd946"
 
 [[projects]]
   name = "github.com/alecthomas/kingpin"
@@ -32,16 +32,22 @@
   version = "1.0.0"
 
 [[projects]]
-  branch = "master"
   name = "github.com/avast/retry-go"
   packages = ["."]
   revision = "8ea1249ed2dd5600287db23bd410aaecd8c65678"
+  version = "0.1.0"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
   version = "v1.1.0"
+
+[[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
 
 [[projects]]
   name = "github.com/pmezard/go-difflib"
@@ -65,17 +71,17 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "eb71ad9bd329b5ac0fd0148dd99bd62e8be8e035"
+  revision = "edd5e9b0879d13ee6970a50153d85b8fec9f7686"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
-  revision = "07c182904dbd53199946ba614a412c61d3c548f5"
+  revision = "8dbc5d05d6edcc104950cc299a1ce6641235bc86"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3842dc864bafaaceae943f529849bb21f52ea706c3c0f0b9b948550b22687ab5"
+  inputs-digest = "9226f4d7edc1b826624509a7d853bdcdade56a509b0d97d33a196d47d707d1ae"
   solver-name = "gps-cdcl"
   solver-version = 1
