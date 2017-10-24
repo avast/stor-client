@@ -138,7 +138,7 @@ func (client *StorClient) Start() {
 }
 
 func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat chan<- TotalStat) {
-	total := TotalStat{expectedDownloadCount: client.expectedDownloadCount}
+	total := TotalStat{}
 	for stat := range downloadStats {
 		total.Size += stat.Size
 		total.Duration += stat.Duration
@@ -148,6 +148,8 @@ func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat 
 			total.Count++
 		}
 	}
+
+	total.expectedDownloadCount = client.expectedDownloadCount
 
 	totalStat <- total
 }
