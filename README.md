@@ -51,6 +51,8 @@ Args:
 
 ## golang client
 
+[golang stor-client library](client/README.md)
+
 async example
 
 ```

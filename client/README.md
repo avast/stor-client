@@ -109,7 +109,10 @@ type StorClientOpts struct {
 ```go
 type TotalStat struct {
 	DownStat
+	// Count of downloaded files
 	Count int
+	// Count of skipped files
+	Skip int
 }
 ```
 
