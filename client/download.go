@@ -11,8 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JaSei/pathutil-go"
 	"github.com/avast/hashutil-go"
 	"github.com/avast/retry-go"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -63,6 +65,8 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 				"worker": id,
 				"sha256": sha.String(),
 			}).Debugf("File %s exists - skip download", filepath)
+
+			downloadedFilesStat <- DownStat{skip: true}
 
 			continue
 		}
@@ -123,14 +127,25 @@ func (client *StorClient) createUrl(sha hashutil.Hash) string {
 }
 
 func downloadFile(httpClient httpClient, filepath string, url string, devnull bool, expectedSha hashutil.Hash) (size int64, err error) {
-	var out interface{}
+	var out io.Writer
+
+	temppath, err := pathutil.NewPath(filepath + ".temp")
+	if err != nil {
+		return 0, errors.Wrap(err, "Construct of new temp file fail")
+	}
+
+	if temppath.Exists() {
+		if err := temppath.Remove(); err != nil {
+			return 0, errors.Wrapf(err, "Cleanup old tempfile %s fail", temppath)
+		}
+	}
 
 	if devnull {
 		out = ioutil.Discard
 	} else {
-		out, err = os.Create(filepath)
+		out, err = temppath.OpenWriter()
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "OpenWriter to tempfile %s fail", temppath)
 		}
 	}
 
@@ -151,7 +166,7 @@ func downloadFile(httpClient httpClient, filepath string, url string, devnull bo
 
 	hasher := sha256.New()
 
-	multi := io.MultiWriter(out.(io.Writer), hasher)
+	multi := io.MultiWriter(out, hasher)
 
 	size, err = io.Copy(multi, resp.Body)
 	if err != nil {
@@ -161,7 +176,7 @@ func downloadFile(httpClient httpClient, filepath string, url string, devnull bo
 	if !devnull {
 		err := out.(*os.File).Close()
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "Close %s fail", temppath)
 		}
 	}
 
@@ -172,6 +187,12 @@ func downloadFile(httpClient httpClient, filepath string, url string, devnull bo
 
 	if !downSha256.Equal(expectedSha) {
 		return 0, fmt.Errorf("Downloaded sha (%s) is not equal with expected sha (%s)", downSha256, expectedSha)
+	}
+
+	if !devnull {
+		if _, err := temppath.Rename(filepath); err != nil {
+			return 0, errors.Wrapf(err, "Rename temp %s to final path %s fail", temppath, filepath)
+		}
 	}
 
 	return size, nil

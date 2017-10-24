@@ -16,6 +16,7 @@ SYNOPSIS
 package storclient
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -68,11 +69,15 @@ type StorClient struct {
 type DownStat struct {
 	Size     int64
 	Duration time.Duration
+	skip     bool
 }
 
 type TotalStat struct {
 	DownStat
-	Count                 int
+	// Count of downloaded files
+	Count int
+	// Count of skipped files
+	Skip                  int
 	expectedDownloadCount int
 }
 
@@ -137,7 +142,11 @@ func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat 
 	for stat := range downloadStats {
 		total.Size += stat.Size
 		total.Duration += stat.Duration
-		total.Count++
+		if stat.skip {
+			total.Skip++
+		} else {
+			total.Count++
+		}
 	}
 
 	totalStat <- total
@@ -168,20 +177,20 @@ func (client *StorClient) sendEndSignalToAllWorkers() {
 
 // format and log total stats
 func (total TotalStat) Print(startTime time.Time) {
-	var totalSizeMB float64 = (float64)(total.Size / (1024 * 1024))
+	var totalSizeMB float64 = (float64)(total.Size) / (1024 * 1024)
 	totalDuration := time.Since(startTime)
 
-	log.Infof(
-		"total downloaded size: %0.3fMB\ntotal time: %0.3fs\ndownload time: %0.3fs (sum of all downloads => unparallel)\ndownload rate %0.3fMB/s (unparallel rate %0.3fMB/s)\n",
-		totalSizeMB,
-		totalDuration.Seconds(),
-		total.Duration.Seconds(),
-		totalSizeMB/total.Duration.Seconds(),
-		totalSizeMB/total.Duration.Seconds(),
-	)
+	log.WithFields(log.Fields{
+		"total download size":                 fmt.Sprintf("%0.3fMB", totalSizeMB),
+		"total time":                          fmt.Sprintf("%0.3fs", totalDuration.Seconds()),
+		"download rate":                       fmt.Sprintf("%0.3fMB/s", totalSizeMB/totalDuration.Seconds()),
+		"expected count of files to download": total.expectedDownloadCount,
+		"downloaded files":                    total.Count,
+		"skipped files":                       total.Skip,
+	}).Info("statistics")
 }
 
 // Status return true if all files are downloaded
 func (total TotalStat) Status() bool {
-	return total.Count == total.expectedDownloadCount
+	return total.Count+total.Skip == total.expectedDownloadCount
 }

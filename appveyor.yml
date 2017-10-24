@@ -1,3 +1,4 @@
+
 version: "{build}"
 
 clone_folder: c:\Users\appveyor\go\src\github.com\avast\stor-client
