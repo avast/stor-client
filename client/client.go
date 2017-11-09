@@ -66,14 +66,28 @@ type StorClient struct {
 	StorClientOpts
 }
 
+type DownloadStatus int
+
+const (
+	// downlad fail (default)
+	DOWN_FAIL DownloadStatus = iota
+	// downlad skipped because file is downlad
+	DOWN_SKIP
+	// downlad ok
+	DOWN_OK
+)
+
 type DownStat struct {
 	Size     int64
 	Duration time.Duration
-	skip     bool
+	Status   DownloadStatus
 }
 
+// Size and Duration is duplicate, becuse embedding not works, because
+//   https://stackoverflow.com/questions/41686692/embedding-structs-in-golang-gives-error-unknown-field
 type TotalStat struct {
-	DownStat
+	Size     int64
+	Duration time.Duration
 	// Count of downloaded files
 	Count int
 	// Count of skipped files
@@ -142,9 +156,9 @@ func (client *StorClient) processStats(downloadStats <-chan DownStat, totalStat 
 	for stat := range downloadStats {
 		total.Size += stat.Size
 		total.Duration += stat.Duration
-		if stat.skip {
+		if stat.Status == DOWN_SKIP {
 			total.Skip++
-		} else {
+		} else if stat.Status == DOWN_OK {
 			total.Count++
 		}
 	}

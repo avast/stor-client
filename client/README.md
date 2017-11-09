@@ -39,11 +39,39 @@ type DownPool struct {
 
 ```go
 type DownStat struct {
+	DownStatCommon
+	Status DownloadStatus
+}
+```
+
+
+#### type DownStatCommon
+
+```go
+type DownStatCommon struct {
 	Size     int64
 	Duration time.Duration
 }
 ```
 
+
+#### type DownloadStatus
+
+```go
+type DownloadStatus int
+```
+
+
+```go
+const (
+	// downlad fail (default)
+	DOWN_FAIL DownloadStatus = iota
+	// downlad skipped because file is downlad
+	DOWN_SKIP
+	// downlad ok
+	DOWN_OK
+)
+```
 
 #### type StorClient
 
@@ -108,7 +136,7 @@ type StorClientOpts struct {
 
 ```go
 type TotalStat struct {
-	DownStat
+	DownStatCommon
 	// Count of downloaded files
 	Count int
 	// Count of skipped files
