@@ -99,7 +99,7 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 				"sha256": sha.String(),
 				"error":  err,
 			}).Errorf("Error download %s: %s\n", sha, err)
-			downloadedFilesStat <- DownStat{}
+			downloadedFilesStat <- DownStat{Status: DOWN_FAIL}
 		} else {
 			log.WithFields(log.Fields{
 				"worker": id,
