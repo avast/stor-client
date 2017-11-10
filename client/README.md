@@ -39,18 +39,9 @@ type DownPool struct {
 
 ```go
 type DownStat struct {
-	DownStatCommon
-	Status DownloadStatus
-}
-```
-
-
-#### type DownStatCommon
-
-```go
-type DownStatCommon struct {
 	Size     int64
 	Duration time.Duration
+	Status   DownloadStatus
 }
 ```
 
@@ -136,7 +127,8 @@ type StorClientOpts struct {
 
 ```go
 type TotalStat struct {
-	DownStatCommon
+	Size     int64
+	Duration time.Duration
 	// Count of downloaded files
 	Count int
 	// Count of skipped files
@@ -144,6 +136,9 @@ type TotalStat struct {
 }
 ```
 
+Size and Duration is duplicate, becuse embedding not works, because
+
+    https://stackoverflow.com/questions/41686692/embedding-structs-in-golang-gives-error-unknown-field
 
 #### func (TotalStat) Print
 
