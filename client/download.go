@@ -66,7 +66,7 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 				"sha256": sha.String(),
 			}).Debugf("File %s exists - skip download", filepath)
 
-			downloadedFilesStat <- DownStat{skip: true}
+			downloadedFilesStat <- DownStat{Status: DOWN_SKIP}
 
 			continue
 		}
@@ -99,13 +99,13 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 				"sha256": sha.String(),
 				"error":  err,
 			}).Errorf("Error download %s: %s\n", sha, err)
-			downloadedFilesStat <- DownStat{}
+			downloadedFilesStat <- DownStat{Status: DOWN_FAIL}
 		} else {
 			log.WithFields(log.Fields{
 				"worker": id,
 				"sha256": sha.String(),
 			}).Debugf("Downloaded %s", sha)
-			downloadedFilesStat <- DownStat{Size: size, Duration: downloadDuration}
+			downloadedFilesStat <- DownStat{Size: size, Duration: downloadDuration, Status: DOWN_OK}
 		}
 	}
 }
