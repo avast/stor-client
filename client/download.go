@@ -127,8 +127,6 @@ func (client *StorClient) createUrl(sha hashutil.Hash) string {
 }
 
 func downloadFile(httpClient httpClient, filepath string, url string, devnull bool, expectedSha hashutil.Hash) (size int64, err error) {
-	var out io.Writer
-
 	temppath, err := pathutil.NewPath(filepath + ".temp")
 	if err != nil {
 		return 0, errors.Wrap(err, "Construct of new temp file fail")
@@ -137,15 +135,6 @@ func downloadFile(httpClient httpClient, filepath string, url string, devnull bo
 	if temppath.Exists() {
 		if err := temppath.Remove(); err != nil {
 			return 0, errors.Wrapf(err, "Cleanup old tempfile %s fail", temppath)
-		}
-	}
-
-	if devnull {
-		out = ioutil.Discard
-	} else {
-		out, err = temppath.OpenWriter()
-		if err != nil {
-			return 0, errors.Wrapf(err, "OpenWriter to tempfile %s fail", temppath)
 		}
 	}
 
@@ -164,8 +153,17 @@ func downloadFile(httpClient httpClient, filepath string, url string, devnull bo
 		return 0, downloadError{sha: expectedSha, statusCode: resp.StatusCode, status: resp.Status}
 	}
 
-	hasher := sha256.New()
+	var out io.Writer
+	if devnull {
+		out = ioutil.Discard
+	} else {
+		out, err = temppath.OpenWriter()
+		if err != nil {
+			return 0, errors.Wrapf(err, "OpenWriter to tempfile %s fail", temppath)
+		}
+	}
 
+	hasher := sha256.New()
 	multi := io.MultiWriter(out, hasher)
 
 	size, err = io.Copy(multi, resp.Body)
