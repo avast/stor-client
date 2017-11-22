@@ -168,7 +168,7 @@ func downloadFile(httpClient httpClient, filepath string, url string, devnull bo
 
 	size, err = io.Copy(multi, resp.Body)
 	if err != nil {
-		out.(*os.File).Close()
+		closeErr := out.(*os.File).Close()
 		if closeErr != nil {
 			return 0, errors.Wrapf(closeErr, "Close after copy failure of %s fail", temppath)
 		} else {
