@@ -131,7 +131,7 @@ func (client *StorClient) createUrl(sha hashutil.Hash) string {
 	return fmt.Sprintf("%s/%s", storage, sha)
 }
 
-func downloadFileToDevnull(httpClient *http.Client, url string, expectedSha hashutil.Hash) (size int64, err error) {
+func downloadFileToDevnull(httpClient httpClient, url string, expectedSha hashutil.Hash) (size int64, err error) {
 	return downloadFileToWriter(httpClient, url, ioutil.Discard, expectedSha)
 }
 
