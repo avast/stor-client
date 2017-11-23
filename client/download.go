@@ -77,7 +77,12 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 		err := retry.RetryCustom(
 			func() error {
 				var err error
-				size, err = downloadFileViaTempFile(httpClient, filepath, client.createUrl(sha), client.Devnull, sha)
+
+				if client.Devnull {
+					size, err = downloadFileToDevnull(httpClient, client.createUrl(sha), sha)
+				} else {
+					size, err = downloadFileViaTempFile(httpClient, filepath, client.createUrl(sha), sha)
+				}
 
 				return err
 			},
@@ -126,7 +131,11 @@ func (client *StorClient) createUrl(sha hashutil.Hash) string {
 	return fmt.Sprintf("%s/%s", storage, sha)
 }
 
-func downloadFileViaTempFile(httpClient httpClient, filepath string, url string, devnull bool, expectedSha hashutil.Hash) (size int64, err error) {
+func downloadFileToDevnull(httpClient *http.Client, url string, expectedSha hashutil.Hash) (size int64, err error) {
+	return downloadFileToWriter(httpClient, url, ioutil.Discard, expectedSha)
+}
+
+func downloadFileViaTempFile(httpClient httpClient, filepath string, url string, expectedSha hashutil.Hash) (size int64, err error) {
 	temppath, err := pathutil.NewPath(filepath + ".temp")
 	if err != nil {
 		return 0, errors.Wrap(err, "Construct of new temp file fail")
@@ -138,21 +147,35 @@ func downloadFileViaTempFile(httpClient httpClient, filepath string, url string,
 		}
 	}
 
-	size, err = downloadFile(httpClient, temppath, url, devnull, expectedSha)
+	size, err = downloadFile(httpClient, temppath, url, expectedSha)
 	if err != nil {
 		return size, err
 	}
 
-	if !devnull {
-		if _, err := temppath.Rename(filepath); err != nil {
-			return 0, errors.Wrapf(err, "Rename temp %s to final path %s fail", temppath, filepath)
-		}
+	if _, err := temppath.Rename(filepath); err != nil {
+		return 0, errors.Wrapf(err, "Rename temp %s to final path %s fail", temppath, filepath)
 	}
 
 	return size, nil
 }
 
-func downloadFile(httpClient httpClient, path pathutil.Path, url string, devnull bool, expectedSha hashutil.Hash) (size int64, err error) {
+func downloadFile(httpClient httpClient, path pathutil.Path, url string, expectedSha hashutil.Hash) (size int64, err error) {
+	out, err := path.OpenWriter()
+	if err != nil {
+		return 0, errors.Wrapf(err, "OpenWriter to tempfile %s fail", path)
+	}
+
+	defer func() {
+		err = out.Close()
+		if err != nil {
+			err = errors.Wrapf(err, "Close %s fail", path)
+		}
+	}()
+
+	return downloadFileToWriter(httpClient, url, out, expectedSha)
+}
+
+func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expectedSha hashutil.Hash) (size int64, err error) {
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		return 0, err
@@ -166,23 +189,6 @@ func downloadFile(httpClient httpClient, path pathutil.Path, url string, devnull
 
 	if resp.StatusCode != 200 {
 		return 0, downloadError{sha: expectedSha, statusCode: resp.StatusCode, status: resp.Status}
-	}
-
-	var out io.Writer
-	if devnull {
-		out = ioutil.Discard
-	} else {
-		out, err = path.OpenWriter()
-		if err != nil {
-			return 0, errors.Wrapf(err, "OpenWriter to tempfile %s fail", path)
-		}
-
-		defer func() {
-			err = out.(*os.File).Close()
-			if err != nil {
-				err = errors.Wrapf(err, "Close %s fail", path)
-			}
-		}()
 	}
 
 	hasher := sha256.New()

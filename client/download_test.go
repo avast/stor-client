@@ -37,22 +37,22 @@ var emptyHash = hashutil.EmptyHash(sha256.New())
 func TestDownloadFile(t *testing.T) {
 	client := &clientMock{}
 
-	path, err := pathutil.NewTempFile(pathutil.TempFileOpt{})
-	assert.NoError(t, err)
-	assert.NoError(t, path.Remove())
-
-	_, err = downloadFile(client, path.Canonpath(), "http://blabla", true, emptyHash)
+	_, err = downloadFileToDevnull(client, "http://blabla", true, emptyHash)
 	assert.Error(t, err)
 
 	client = &clientMock{statusCode: 200, status: "OK"}
-	_, err = downloadFile(client, path.Canonpath(), "http://blabla", true, emptyHash)
+	_, err = downloadFileToDevnull(client, "http://blabla", true, emptyHash)
 	assert.NoError(t, err)
 	if !assert.False(t, path.Exists(), "Downloaded file not exists, becauase /dev/null") {
 		t.Log(path)
 	}
 
+	path, err := pathutil.NewTempFile(pathutil.TempFileOpt{})
+	assert.NoError(t, err)
+	assert.NoError(t, path.Remove())
+
 	client = &clientMock{statusCode: 200, status: "OK"}
-	_, err = downloadFile(client, path.Canonpath(), "http://blabla", false, emptyHash)
+	_, err = downloadFileViaTempFile(client, path.Canonpath(), "http://blabla", false, emptyHash)
 	assert.NoError(t, err)
 	assert.True(t, path.Exists(), "Downloaded file exists")
 	assert.NoError(t, path.Remove())
