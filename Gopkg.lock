@@ -5,7 +5,7 @@
   branch = "implementation"
   name = "github.com/JaSei/pathutil-go"
   packages = ["."]
-  revision = "f48cf8da27f47b06e71b3237925021308d8bd946"
+  revision = "9b57a08cc80f05fb17034ec5639a4427c1730340"
 
 [[projects]]
   name = "github.com/alecthomas/kingpin"
@@ -71,13 +71,13 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "edd5e9b0879d13ee6970a50153d85b8fec9f7686"
+  revision = "9f005a07e0d31d45e6656d241bb5c0f2efd4bc94"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
-  revision = "8dbc5d05d6edcc104950cc299a1ce6641235bc86"
+  revision = "82aafbf43bf885069dc71b7e7c2f9d7a614d47da"
 
 [solve-meta]
   analyzer-name = "dep"
