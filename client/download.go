@@ -149,6 +149,10 @@ func downloadFileViaTempFile(httpClient httpClient, filepath string, url string,
 
 	size, err = downloadFile(httpClient, temppath, url, expectedSha)
 	if err != nil {
+		if remErr := temppath.Remove(); remErr != nil {
+			err = errors.Wrapf(remErr, "Cleanup tempfile after failed download fail")
+		}
+
 		return size, err
 	}
 
