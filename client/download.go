@@ -164,8 +164,6 @@ func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url 
 
 	size, err = downloadFile(httpClient, temppath, url, expectedSha)
 
-	log.Debugln(err)
-
 	if err != nil {
 		if remErr := temppath.Remove(); remErr != nil {
 			err = errors.Wrapf(remErr, "Cleanup tempfile after failed download fail")
@@ -208,7 +206,6 @@ func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expe
 	}()
 
 	if resp.StatusCode != 200 {
-		log.Debugln(resp)
 		return 0, downloadError{sha: expectedSha, statusCode: resp.StatusCode, status: resp.Status}
 	}
 
