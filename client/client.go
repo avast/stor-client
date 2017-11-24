@@ -17,7 +17,7 @@ package storclient
 
 import (
 	"fmt"
-	"net/http"
+	//"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -40,14 +40,14 @@ type StorClientOpts struct {
 	RetryDelay time.Duration
 	// count of tries of retry
 	// default is 10
-	RetryTries uint
+	RetryAttempts uint
 }
 
 const (
-	DefaultMax        = 4
-	DefaultTimeout    = 30 * time.Second
-	DefaultRetryTries = 10
-	DefaultRetryDelay = 1e5 * time.Microsecond
+	DefaultMax           = 4
+	DefaultTimeout       = 30 * time.Second
+	DefaultRetryAttempts = 10
+	DefaultRetryDelay    = 1e5 * time.Microsecond
 )
 
 type DownPool struct {
@@ -59,7 +59,7 @@ type StorClient struct {
 	downloadDir           string
 	storageUrl            url.URL
 	pool                  DownPool
-	httpClient            *http.Client
+	httpClient            httpClient
 	total                 chan TotalStat
 	wg                    sync.WaitGroup
 	expectedDownloadCount int
@@ -124,10 +124,10 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 		client.RetryDelay = opts.RetryDelay
 	}
 
-	if opts.RetryTries == 0 {
-		client.RetryTries = DefaultRetryTries
+	if opts.RetryAttempts == 0 {
+		client.RetryAttempts = DefaultRetryAttempts
 	} else {
-		client.RetryTries = opts.RetryTries
+		client.RetryAttempts = opts.RetryAttempts
 	}
 
 	downloadPool := DownPool{
@@ -144,7 +144,7 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 func (client *StorClient) Start() {
 	for id := 0; id < client.Max; id++ {
 		client.wg.Add(1)
-		go client.downloadWorker(id, client.pool.input, client.pool.output)
+		go client.downloadWorker(id, client.newHttpClient(), client.pool.input, client.pool.output)
 	}
 
 	client.total = make(chan TotalStat, 1)
