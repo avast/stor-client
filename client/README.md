@@ -20,10 +20,10 @@
 
 ```go
 const (
-	DefaultMax        = 4
-	DefaultTimeout    = 30 * time.Second
-	DefaultRetryTries = 10
-	DefaultRetryDelay = 1e5 * time.Microsecond
+	DefaultMax           = 4
+	DefaultTimeout       = 30 * time.Second
+	DefaultRetryAttempts = 10
+	DefaultRetryDelay    = 1e5 * time.Microsecond
 )
 ```
 
@@ -118,7 +118,7 @@ type StorClientOpts struct {
 	RetryDelay time.Duration
 	// count of tries of retry
 	// default is 10
-	RetryTries uint
+	RetryAttempts uint
 }
 ```
 

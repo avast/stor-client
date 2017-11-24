@@ -6,8 +6,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -45,12 +43,10 @@ func (err downloadError) Error() string {
 //	}
 //}
 
-func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil.Hash, downloadedFilesStat chan<- DownStat) {
+func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForDownload <-chan hashutil.Hash, downloadedFilesStat chan<- DownStat) {
 	defer client.wg.Done()
 
 	log.WithField("worker", id).Debugln("Start download worker...")
-
-	httpClient := client.newHttpClient()
 
 	for sha := range shasForDownload {
 		if sha.Equal(workerEnd) {
@@ -58,9 +54,16 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 			return
 		}
 
-		filepath := path.Join(client.downloadDir, sha.String())
+		filepath, err := pathutil.NewPath(client.downloadDir, sha.String())
+		if err != nil {
+			log.Errorf("NewPath problem: %s", err)
 
-		if _, err := os.Stat(filepath); !os.IsNotExist(err) {
+			downloadedFilesStat <- DownStat{Status: DOWN_FAIL}
+
+			continue
+		}
+
+		if filepath.Exists() {
 			log.WithFields(log.Fields{
 				"worker": id,
 				"sha256": sha.String(),
@@ -74,7 +77,7 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 		startTime := time.Now()
 
 		var size int64
-		err := retry.RetryCustom(
+		err = retry.Do(
 			func() error {
 				var err error
 
@@ -86,14 +89,26 @@ func (client *StorClient) downloadWorker(id int, shasForDownload <-chan hashutil
 
 				return err
 			},
-			func(n uint, err error) {
+			retry.OnRetry(func(n uint, err error) {
 				log.WithFields(log.Fields{
 					"worker": id,
 					"sha256": sha.String(),
 					//}).WithFields(err.(logFieldsError).LogFields()).Debugf("Retry #%d: %s", n, err)
 				}).Debugf("Retry #%d: %s", n, err)
-			},
-			retry.NewRetryOpts().Delay(client.RetryDelay).Tries(client.RetryTries).Units(1),
+			}),
+			retry.RetryIf(func(err error) bool {
+				switch e := err.(type) {
+				case downloadError:
+					if (downloadError)(e).statusCode == 404 {
+						return false
+					}
+				}
+
+				return true
+			}),
+			retry.Delay(client.RetryDelay),
+			retry.Attempts(client.RetryAttempts),
+			retry.Units(1),
 		)
 
 		downloadDuration := time.Since(startTime)
@@ -135,8 +150,8 @@ func downloadFileToDevnull(httpClient httpClient, url string, expectedSha hashut
 	return downloadFileToWriter(httpClient, url, ioutil.Discard, expectedSha)
 }
 
-func downloadFileViaTempFile(httpClient httpClient, filepath string, url string, expectedSha hashutil.Hash) (size int64, err error) {
-	temppath, err := pathutil.NewPath(filepath + ".temp")
+func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url string, expectedSha hashutil.Hash) (size int64, err error) {
+	temppath, err := pathutil.NewPath(filepath.String() + ".temp")
 	if err != nil {
 		return 0, errors.Wrap(err, "Construct of new temp file fail")
 	}
@@ -148,6 +163,7 @@ func downloadFileViaTempFile(httpClient httpClient, filepath string, url string,
 	}
 
 	size, err = downloadFile(httpClient, temppath, url, expectedSha)
+
 	if err != nil {
 		if remErr := temppath.Remove(); remErr != nil {
 			err = errors.Wrapf(remErr, "Cleanup tempfile after failed download fail")
@@ -156,7 +172,7 @@ func downloadFileViaTempFile(httpClient httpClient, filepath string, url string,
 		return size, err
 	}
 
-	if _, err := temppath.Rename(filepath); err != nil {
+	if _, err := temppath.Rename(filepath.Canonpath()); err != nil {
 		return 0, errors.Wrapf(err, "Rename temp %s to final path %s fail", temppath, filepath)
 	}
 
@@ -170,8 +186,7 @@ func downloadFile(httpClient httpClient, path pathutil.Path, url string, expecte
 	}
 
 	defer func() {
-		err = out.Close()
-		if err != nil {
+		if errClose := out.Close(); errClose != nil {
 			err = errors.Wrapf(err, "Close %s fail", path)
 		}
 	}()
@@ -185,9 +200,8 @@ func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expe
 		return 0, err
 	}
 	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			log.Fatalln(err)
+		if errClose := resp.Body.Close(); errClose != nil {
+			err = errClose
 		}
 	}()
 
