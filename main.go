@@ -52,7 +52,7 @@ var (
 	retryDelay    = kingpin.Flag("delay", "exponential retry - start delay time").Default(storclient.DefaultRetryDelay.String()).Duration()
 	retryAttempts = kingpin.Flag("attempts", "count of attempts of retry").Default(strconv.Itoa(storclient.DefaultRetryAttempts)).Uint()
 	extension     = kingpin.Flag("extension", "downloaded file extension - like '.dat' = SHA.dat").Default("").String()
-	upperCase     = kingpin.Flag("upper", "name of file will be upper case (not applied extension)").Bool()
+	upperCase     = kingpin.Flag("upper", "name of file will be upper case (not applied to extension)").Bool()
 )
 
 func main() {
