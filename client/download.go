@@ -54,7 +54,16 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 			return
 		}
 
-		filepath, err := pathutil.NewPath(client.downloadDir, sha.String())
+		filename := sha.String()
+		if client.UpperCase {
+			filename = strings.ToUpper(sha.String())
+		}
+
+		if client.Extension != "" {
+			filename += client.Extension
+		}
+
+		filepath, err := pathutil.NewPath(client.downloadDir, filename)
 		if err != nil {
 			log.Errorf("NewPath problem: %s", err)
 

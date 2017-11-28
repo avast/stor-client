@@ -51,6 +51,8 @@ var (
 	logJson       = kingpin.Flag("json", "log in json format").Bool()
 	retryDelay    = kingpin.Flag("delay", "exponential retry - start delay time").Default(storclient.DefaultRetryDelay.String()).Duration()
 	retryAttempts = kingpin.Flag("attempts", "count of attempts of retry").Default(strconv.Itoa(storclient.DefaultRetryAttempts)).Uint()
+	extension     = kingpin.Flag("extension", "downloaded file extension - like '.dat' = SHA.dat").Default("").String()
+	upperCase     = kingpin.Flag("upper", "name of file will be upper case (not applied extension)").Bool()
 )
 
 func main() {
@@ -72,6 +74,8 @@ func main() {
 		Timeout:       *timeout,
 		RetryDelay:    *retryDelay,
 		RetryAttempts: *retryAttempts,
+		Extension:     *extension,
+		UpperCase:     *upperCase,
 	})
 	client.Start()
 
