@@ -119,6 +119,12 @@ type StorClientOpts struct {
 	// count of tries of retry
 	// default is 10
 	RetryAttempts uint
+	// downladed file suffix
+	// e.g. .dat => SHA.dat file
+	// default ("") means without suffix
+	Suffix string
+	// name of file will be upper case (not applied to extension)
+	UpperCase bool
 }
 ```
 

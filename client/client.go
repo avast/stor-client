@@ -41,6 +41,12 @@ type StorClientOpts struct {
 	// count of tries of retry
 	// default is 10
 	RetryAttempts uint
+	// downladed file suffix
+	// e.g. .dat => SHA.dat file
+	// default ("") means without suffix
+	Suffix string
+	// name of file will be upper case (not applied to extension)
+	UpperCase bool
 }
 
 const (
@@ -117,6 +123,8 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 	}
 
 	client.Devnull = opts.Devnull
+	client.UpperCase = opts.UpperCase
+	client.Suffix = opts.Suffix
 
 	if opts.RetryDelay == 0 {
 		client.RetryDelay = DefaultRetryDelay

@@ -1,4 +1,5 @@
 HELP?=$$(go run main.go --help 2>&1)
+VERSION?=$$(cat VERSION)
 
 setup: ## Install all the build and lint dependencies
 	go get -u github.com/alecthomas/gometalinter
@@ -45,6 +46,9 @@ ci: test lint  ## Run all the tests and code checks
 
 build: ## Build the app
 	go build
+
+release: ## Release new version
+	git tag | grep -q $(VERSION) && echo This version was released! Increase VERSION! || git tag $(VERSION) && git push origin $(VERSION)
 
 # Absolutely awesome: http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 help:
