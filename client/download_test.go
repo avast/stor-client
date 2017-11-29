@@ -99,7 +99,7 @@ func TestDownloadWorker(t *testing.T) {
 
 	t.Run("extension", func(t *testing.T) {
 		httpClient := &clientMock{statusCode: 200, status: "Ok"}
-		oneDownloadWorkerTest(t, StorClientOpts{UpperCase: true, Extension: ".dat"}, httpClient, emptyHash, func(tempdir pathutil.Path, stat DownStat) {
+		oneDownloadWorkerTest(t, StorClientOpts{UpperCase: true, Suffix: ".dat"}, httpClient, emptyHash, func(tempdir pathutil.Path, stat DownStat) {
 			assert.Equal(t, DOWN_OK, stat.Status)
 			assert.Equal(t, int64(0), stat.Size)
 

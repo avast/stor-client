@@ -59,9 +59,7 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 			filename = strings.ToUpper(sha.String())
 		}
 
-		if client.Extension != "" {
-			filename += client.Extension
-		}
+		filename += client.Suffix
 
 		filepath, err := pathutil.NewPath(client.downloadDir, filename)
 		if err != nil {
