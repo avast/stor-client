@@ -81,6 +81,17 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 			continue
 		}
 
+		if !client.currentDownloads.ContainsOrAdd(sha) {
+			log.WithFields(log.Fields{
+				"worker": id,
+				"sha256": sha.String(),
+			}).Debug("File is now downloading in other worker - skip download")
+
+			downloadedFilesStat <- DownStat{Status: DOWN_SKIP}
+
+			continue
+		}
+
 		startTime := time.Now()
 
 		var size int64
@@ -119,6 +130,7 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 		)
 
 		downloadDuration := time.Since(startTime)
+		client.currentDownloads.Del(sha)
 
 		if err != nil {
 			log.WithFields(log.Fields{

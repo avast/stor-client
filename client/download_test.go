@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JaSei/pathutil-go"
 	"github.com/avast/hashutil-go"
@@ -31,6 +32,19 @@ type clientMock struct {
 
 func (c *clientMock) Get(url string) (*http.Response, error) {
 	var body bodyMock
+
+	return &http.Response{StatusCode: c.statusCode, Status: c.status, Body: body}, nil
+}
+
+type clientMockWithDelay struct {
+	statusCode int
+	status     string
+}
+
+func (c *clientMockWithDelay) Get(url string) (*http.Response, error) {
+	var body bodyMock
+
+	time.Sleep(time.Millisecond)
 
 	return &http.Response{StatusCode: c.statusCode, Status: c.status, Body: body}, nil
 }
@@ -111,6 +125,21 @@ func TestDownloadWorker(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("more workers", func(t *testing.T) {
+		httpClient := &clientMockWithDelay{statusCode: 200, status: "Ok"}
+		downloadWorkersTest(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash, emptyHash}, 2, func(tempdir pathutil.Path, stats []DownStat) {
+			assert.Equal(t, DOWN_SKIP, stats[0].Status)
+			assert.Equal(t, DOWN_OK, stats[1].Status)
+
+			downloadFile, err := tempdir.Child(emptyHash.String())
+			assert.NoError(t, err)
+
+			if !assert.True(t, downloadFile.Exists()) {
+				t.Log(tempdir.Children())
+			}
+		})
+	})
 }
 
 func oneDownloadWorkerTest(t *testing.T, storClientOpts StorClientOpts, httpClient httpClient, sha256 hashutil.Hash, asserts func(pathutil.Path, DownStat)) {
@@ -134,4 +163,35 @@ func oneDownloadWorkerTest(t *testing.T, storClientOpts StorClientOpts, httpClie
 
 	stat := <-downloadedFilesStat
 	asserts(tempdir, stat)
+}
+
+func downloadWorkersTest(t *testing.T, storClientOpts StorClientOpts, httpClient httpClient, sha256list []hashutil.Hash, workers int, asserts func(pathutil.Path, []DownStat)) {
+	tempdir, err := pathutil.NewTempDir(pathutil.TempOpt{})
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, tempdir.RemoveTree())
+	}()
+	storClient := New(url.URL{}, tempdir.Canonpath(), storClientOpts)
+
+	storClient.wg.Add(workers)
+	log.SetLevel(log.DebugLevel)
+
+	shasForDownload := make(chan hashutil.Hash, 3)
+	downloadedFilesStat := make(chan DownStat, 3)
+
+	for _, sha256 := range sha256list {
+		shasForDownload <- sha256
+	}
+
+	shasForDownload <- workerEnd
+
+	for i := 0; i < workers; i++ {
+		go storClient.downloadWorker(0, httpClient, shasForDownload, downloadedFilesStat)
+	}
+
+	stats := make([]DownStat, workers)
+	for i := 0; i < workers; i++ {
+		stats[i] = <-downloadedFilesStat
+	}
+	asserts(tempdir, stats)
 }

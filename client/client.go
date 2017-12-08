@@ -69,6 +69,7 @@ type StorClient struct {
 	total                 chan TotalStat
 	wg                    sync.WaitGroup
 	expectedDownloadCount int
+	currentDownloads      currentDownloads
 	StorClientOpts
 }
 
