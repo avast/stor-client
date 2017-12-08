@@ -75,17 +75,17 @@ func TestDownloadFile(t *testing.T) {
 func TestDownloadWorker(t *testing.T) {
 	t.Run("File not found", func(t *testing.T) {
 		httpClient := &clientMock{statusCode: 404, status: "Not found"}
-		oneDownloadWorkerTest(t, StorClientOpts{}, httpClient, emptyHash, func(tempdir pathutil.Path, stat DownStat) {
-			assert.Equal(t, DOWN_FAIL, stat.Status)
-			assert.Equal(t, int64(0), stat.Size)
+		downloadWorkersTest(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
+			assert.Equal(t, DOWN_FAIL, stat[0].Status)
+			assert.Equal(t, int64(0), stat[0].Size)
 		})
 	})
 
 	t.Run("lowercase", func(t *testing.T) {
 		httpClient := &clientMock{statusCode: 200, status: "Ok"}
-		oneDownloadWorkerTest(t, StorClientOpts{}, httpClient, emptyHash, func(tempdir pathutil.Path, stat DownStat) {
-			assert.Equal(t, DOWN_OK, stat.Status)
-			assert.Equal(t, int64(0), stat.Size)
+		downloadWorkersTest(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
+			assert.Equal(t, DOWN_OK, stat[0].Status)
+			assert.Equal(t, int64(0), stat[0].Size)
 
 			downloadFile, err := tempdir.Child(strings.ToLower(emptyHash.String()))
 			assert.NoError(t, err)
@@ -98,7 +98,7 @@ func TestDownloadWorker(t *testing.T) {
 
 	t.Run("uppercase", func(t *testing.T) {
 		httpClient := &clientMock{statusCode: 200, status: "Ok"}
-		oneDownloadWorkerTest(t, StorClientOpts{UpperCase: true}, httpClient, emptyHash, func(tempdir pathutil.Path, stat DownStat) {
+		downloadWorkersTest(t, StorClientOpts{UpperCase: true}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
 			downloadFile, err := tempdir.Child(strings.ToUpper(emptyHash.String()))
 			assert.NoError(t, err)
 
@@ -106,16 +106,16 @@ func TestDownloadWorker(t *testing.T) {
 				t.Log(tempdir.Children())
 			}
 
-			assert.Equal(t, DOWN_OK, stat.Status)
-			assert.Equal(t, int64(0), stat.Size)
+			assert.Equal(t, DOWN_OK, stat[0].Status)
+			assert.Equal(t, int64(0), stat[0].Size)
 		})
 	})
 
 	t.Run("extension", func(t *testing.T) {
 		httpClient := &clientMock{statusCode: 200, status: "Ok"}
-		oneDownloadWorkerTest(t, StorClientOpts{UpperCase: true, Suffix: ".dat"}, httpClient, emptyHash, func(tempdir pathutil.Path, stat DownStat) {
-			assert.Equal(t, DOWN_OK, stat.Status)
-			assert.Equal(t, int64(0), stat.Size)
+		downloadWorkersTest(t, StorClientOpts{UpperCase: true, Suffix: ".dat"}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
+			assert.Equal(t, DOWN_OK, stat[0].Status)
+			assert.Equal(t, int64(0), stat[0].Size)
 
 			downloadFile, err := tempdir.Child(strings.ToUpper(emptyHash.String()) + ".dat")
 			assert.NoError(t, err)
@@ -140,29 +140,6 @@ func TestDownloadWorker(t *testing.T) {
 			}
 		})
 	})
-}
-
-func oneDownloadWorkerTest(t *testing.T, storClientOpts StorClientOpts, httpClient httpClient, sha256 hashutil.Hash, asserts func(pathutil.Path, DownStat)) {
-	tempdir, err := pathutil.NewTempDir(pathutil.TempOpt{})
-	assert.NoError(t, err)
-	defer func() {
-		assert.NoError(t, tempdir.RemoveTree())
-	}()
-	storClient := New(url.URL{}, tempdir.Canonpath(), storClientOpts)
-
-	storClient.wg.Add(1)
-	log.SetLevel(log.DebugLevel)
-
-	shasForDownload := make(chan hashutil.Hash, 2)
-	downloadedFilesStat := make(chan DownStat, 2)
-
-	shasForDownload <- sha256
-	shasForDownload <- workerEnd
-
-	storClient.downloadWorker(0, httpClient, shasForDownload, downloadedFilesStat)
-
-	stat := <-downloadedFilesStat
-	asserts(tempdir, stat)
 }
 
 func downloadWorkersTest(t *testing.T, storClientOpts StorClientOpts, httpClient httpClient, sha256list []hashutil.Hash, workers int, asserts func(pathutil.Path, []DownStat)) {
