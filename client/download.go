@@ -163,19 +163,23 @@ func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url 
 		return 0, errors.Wrap(err, "Construct of new temp file fail")
 	}
 
+	// cleanup tempfile if this function fail (err is set)
+	defer func() {
+		if err != nil {
+			if remErr := temppath.Remove(); remErr != nil {
+				err = errors.Wrapf(remErr, "Cleanup tempfile %s fail", temppath)
+			}
+		}
+	}()
+
 	if temppath.Exists() {
 		if err := temppath.Remove(); err != nil {
-			return 0, errors.Wrapf(err, "Cleanup old tempfile %s fail", temppath)
+			return 0, errors.Wrapf(err, "Cleanup old (exists) tempfile %s fail", temppath)
 		}
 	}
 
 	size, err = downloadFile(httpClient, temppath, url, expectedSha)
-
 	if err != nil {
-		if remErr := temppath.Remove(); remErr != nil {
-			err = errors.Wrapf(remErr, "Cleanup tempfile after failed download fail")
-		}
-
 		return size, err
 	}
 
