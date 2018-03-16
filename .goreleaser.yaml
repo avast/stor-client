@@ -18,4 +18,4 @@ nfpm:
 archive:
   format_overrides:
     - goos: windows
-      format: binary
+      format: zip
