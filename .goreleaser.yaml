@@ -15,3 +15,7 @@ fpm:
   formats:
     - deb
     - rpm
+archive:
+  format_overrides:
+    - goos: windows
+      format: zip
