@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -29,6 +30,11 @@ type downloadError struct {
 	sha        hashutil.Hash
 	statusCode int
 	status     string
+}
+
+type successDownload struct {
+	size         int64
+	lastModified time.Time
 }
 
 func (err downloadError) Error() string {
@@ -166,7 +172,8 @@ func (client *StorClient) createUrl(sha hashutil.Hash) string {
 }
 
 func downloadFileToDevnull(httpClient httpClient, url string, expectedSha hashutil.Hash) (size int64, err error) {
-	return downloadFileToWriter(httpClient, url, ioutil.Discard, expectedSha)
+	succ, err := downloadFileToWriter(httpClient, url, ioutil.Discard, expectedSha)
+	return succ.size, err
 }
 
 func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url string, expectedSha hashutil.Hash) (size int64, err error) {
@@ -190,22 +197,26 @@ func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url 
 		}
 	}
 
-	size, err = downloadFile(httpClient, temppath, url, expectedSha)
+	succ, err := downloadFile(httpClient, temppath, url, expectedSha)
 	if err != nil {
-		return size, err
+		return 0, err
 	}
 
 	if _, err := temppath.Rename(filepath.Canonpath()); err != nil {
 		return 0, errors.Wrapf(err, "Rename temp %s to final path %s fail", temppath, filepath)
 	}
 
-	return size, nil
+	if err = os.Chtimes(filepath.Canonpath(), succ.lastModified, succ.lastModified); err != nil {
+		return 0, errors.Wrapf(err, "Chtimes(%s, %s) fail", filepath.Canonpath(), succ.lastModified.String())
+	}
+
+	return succ.size, nil
 }
 
-func downloadFile(httpClient httpClient, path pathutil.Path, url string, expectedSha hashutil.Hash) (size int64, err error) {
+func downloadFile(httpClient httpClient, path pathutil.Path, url string, expectedSha hashutil.Hash) (succ successDownload, err error) {
 	out, err := path.OpenWriter()
 	if err != nil {
-		return 0, errors.Wrapf(err, "OpenWriter to tempfile %s fail", path)
+		return successDownload{}, errors.Wrapf(err, "OpenWriter to tempfile %s fail", path)
 	}
 
 	defer func() {
@@ -217,10 +228,10 @@ func downloadFile(httpClient httpClient, path pathutil.Path, url string, expecte
 	return downloadFileToWriter(httpClient, url, out, expectedSha)
 }
 
-func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expectedSha hashutil.Hash) (size int64, err error) {
+func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expectedSha hashutil.Hash) (succ successDownload, err error) {
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		return 0, err
+		return successDownload{}, err
 	}
 	defer func() {
 		if errClose := resp.Body.Close(); errClose != nil {
@@ -229,25 +240,45 @@ func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expe
 	}()
 
 	if resp.StatusCode != 200 {
-		return 0, downloadError{sha: expectedSha, statusCode: resp.StatusCode, status: resp.Status}
+		return successDownload{}, downloadError{sha: expectedSha, statusCode: resp.StatusCode, status: resp.Status}
+	}
+
+	lastModified, err := getLastModifiedTime(resp)
+	if err != nil {
+		return successDownload{}, err
 	}
 
 	hasher := sha256.New()
 	multi := io.MultiWriter(out, hasher)
 
-	size, err = io.Copy(multi, resp.Body)
+	size, err := io.Copy(multi, resp.Body)
 	if err != nil {
-		return 0, err
+		return successDownload{}, err
 	}
 
 	downSha256, err := hashutil.BytesToHash(sha256.New(), hasher.Sum(nil))
 	if err != nil {
-		return 0, err
+		return successDownload{}, err
 	}
 
 	if !downSha256.Equal(expectedSha) {
-		return 0, fmt.Errorf("Downloaded sha (%s) is not equal with expected sha (%s)", downSha256, expectedSha)
+		return successDownload{}, fmt.Errorf("Downloaded sha (%s) is not equal with expected sha (%s)", downSha256, expectedSha)
 	}
 
-	return size, nil
+	return successDownload{
+		size:         size,
+		lastModified: lastModified,
+	}, nil
+}
+
+func getLastModifiedTime(resp *http.Response) (time.Time, error) {
+	lastModified := time.Now()
+	if lastModifiedStr := resp.Header.Get("Last-Modified"); lastModifiedStr != "" {
+		lastModified, err := http.ParseTime(lastModifiedStr)
+		if err != nil {
+			return lastModified, err
+		}
+	}
+
+	return lastModified, nil
 }
