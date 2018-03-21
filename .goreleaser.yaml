@@ -6,7 +6,7 @@ builds:
       - linux
     goarch:
       - amd64
-fpm:
+nfpm:
   vendor: Avast Software
   homepage: https://github.com/avast/stor-client
   maintainer: Jan Seidl <seidl@avast.com>
@@ -15,3 +15,7 @@ fpm:
   formats:
     - deb
     - rpm
+archive:
+  format_overrides:
+    - goos: windows
+      format: zip
