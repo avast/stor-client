@@ -159,7 +159,9 @@ func TestDownloadWorker(t *testing.T) {
 
 			st, err := downloadFile.Stat()
 			assert.NoError(t, err)
-			assert.True(t, time.Date(2018, time.March, 20, 15, 48, 42, 0, time.UTC).Equal(st.ModTime()))
+
+			expectedTime := time.Date(2018, time.March, 20, 15, 48, 42, 0, time.UTC)
+			assert.WithinDuration(t, expectedTime, st.ModTime(), 1*time.Second)
 		})
 	})
 }

@@ -273,8 +273,11 @@ func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expe
 
 func getLastModifiedTime(resp *http.Response) (time.Time, error) {
 	lastModified := time.Now()
+	var err error
+
 	if lastModifiedStr := resp.Header.Get("Last-Modified"); lastModifiedStr != "" {
-		lastModified, err := http.ParseTime(lastModifiedStr)
+		log.Info(lastModifiedStr)
+		lastModified, err = http.ParseTime(lastModifiedStr)
 		if err != nil {
 			return lastModified, err
 		}
