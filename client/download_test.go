@@ -28,12 +28,13 @@ func (b bodyMock) Close() error {
 type clientMock struct {
 	statusCode int
 	status     string
+	header     http.Header
 }
 
 func (c *clientMock) Get(url string) (*http.Response, error) {
 	var body bodyMock
 
-	return &http.Response{StatusCode: c.statusCode, Status: c.status, Body: body}, nil
+	return &http.Response{StatusCode: c.statusCode, Status: c.status, Body: body, Header: c.header}, nil
 }
 
 type clientMockWithDelay struct {
@@ -138,6 +139,29 @@ func TestDownloadWorker(t *testing.T) {
 			if !assert.True(t, downloadFile.Exists()) {
 				t.Log(tempdir.Children())
 			}
+		})
+	})
+
+	t.Run("Last-Modified header", func(t *testing.T) {
+		header := http.Header{}
+		header.Add("Last-Modified", "Tue, 20 Mar 2018 15:48:42 GMT")
+		httpClient := &clientMock{statusCode: 200, status: "Ok", header: header}
+		downloadWorkersTest(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
+			assert.Equal(t, DOWN_OK, stat[0].Status)
+			assert.Equal(t, int64(0), stat[0].Size)
+
+			downloadFile, err := tempdir.Child(strings.ToLower(emptyHash.String()))
+			assert.NoError(t, err)
+
+			if !assert.True(t, downloadFile.Exists()) {
+				t.Log(tempdir.Children())
+			}
+
+			st, err := downloadFile.Stat()
+			assert.NoError(t, err)
+
+			expectedTime := time.Date(2018, time.March, 20, 15, 48, 42, 0, time.UTC)
+			assert.WithinDuration(t, expectedTime, st.ModTime(), 1*time.Second)
 		})
 	})
 }
