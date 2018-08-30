@@ -75,7 +75,7 @@ func TestDownloadFile(t *testing.T) {
 
 func TestDownloadWorker(t *testing.T) {
 	t.Run("File not found", func(t *testing.T) {
-		httpClient := &clientMock{statusCode: 404, status: "Not found"}
+		httpClient := func() httpClient { return &clientMock{statusCode: 404, status: "Not found"} }
 		downloadWorkersTest(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
 			assert.Equal(t, DOWN_FAIL, stat[0].Status)
 			assert.Equal(t, int64(0), stat[0].Size)
@@ -83,22 +83,12 @@ func TestDownloadWorker(t *testing.T) {
 	})
 
 	t.Run("lowercase", func(t *testing.T) {
-		httpClient := &clientMock{statusCode: 200, status: "Ok"}
-		downloadWorkersTest(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
-			assert.Equal(t, DOWN_OK, stat[0].Status)
-			assert.Equal(t, int64(0), stat[0].Size)
-
-			downloadFile, err := tempdir.Child(strings.ToLower(emptyHash.String()))
-			assert.NoError(t, err)
-
-			if !assert.True(t, downloadFile.Exists()) {
-				t.Log(tempdir.Children())
-			}
-		})
+		httpClient := func() httpClient { return &clientMock{statusCode: 200, status: "Ok"} }
+		downloadWorkersTestDownloadOK(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash}, 1)
 	})
 
 	t.Run("uppercase", func(t *testing.T) {
-		httpClient := &clientMock{statusCode: 200, status: "Ok"}
+		httpClient := func() httpClient { return &clientMock{statusCode: 200, status: "Ok"} }
 		downloadWorkersTest(t, StorClientOpts{UpperCase: true}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
 			downloadFile, err := tempdir.Child(strings.ToUpper(emptyHash.String()))
 			assert.NoError(t, err)
@@ -113,7 +103,7 @@ func TestDownloadWorker(t *testing.T) {
 	})
 
 	t.Run("extension", func(t *testing.T) {
-		httpClient := &clientMock{statusCode: 200, status: "Ok"}
+		httpClient := func() httpClient { return &clientMock{statusCode: 200, status: "Ok"} }
 		downloadWorkersTest(t, StorClientOpts{UpperCase: true, Suffix: ".dat"}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
 			assert.Equal(t, DOWN_OK, stat[0].Status)
 			assert.Equal(t, int64(0), stat[0].Size)
@@ -128,7 +118,7 @@ func TestDownloadWorker(t *testing.T) {
 	})
 
 	t.Run("more workers", func(t *testing.T) {
-		httpClient := &clientMockWithDelay{statusCode: 200, status: "Ok"}
+		httpClient := func() httpClient { return &clientMockWithDelay{statusCode: 200, status: "Ok"} }
 		downloadWorkersTest(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash, emptyHash}, 2, func(tempdir pathutil.Path, stats []DownStat) {
 			assert.Equal(t, DOWN_SKIP, stats[0].Status)
 			assert.Equal(t, DOWN_OK, stats[1].Status)
@@ -145,7 +135,7 @@ func TestDownloadWorker(t *testing.T) {
 	t.Run("Last-Modified header", func(t *testing.T) {
 		header := http.Header{}
 		header.Add("Last-Modified", "Tue, 20 Mar 2018 15:48:42 GMT")
-		httpClient := &clientMock{statusCode: 200, status: "Ok", header: header}
+		httpClient := func() httpClient { return &clientMock{statusCode: 200, status: "Ok", header: header} }
 		downloadWorkersTest(t, StorClientOpts{}, httpClient, []hashutil.Hash{emptyHash}, 1, func(tempdir pathutil.Path, stat []DownStat) {
 			assert.Equal(t, DOWN_OK, stat[0].Status)
 			assert.Equal(t, int64(0), stat[0].Size)
@@ -164,15 +154,36 @@ func TestDownloadWorker(t *testing.T) {
 			assert.WithinDuration(t, expectedTime, st.ModTime(), 1*time.Second)
 		})
 	})
+
+	t.Run("S3 first download ok", func(t *testing.T) {
+		httpClient := func() httpClient { return &clientMock{statusCode: 200, status: "Ok"} }
+		downloadWorkersTestDownloadOK(t, StorClientOpts{S3URL: &url.URL{}}, httpClient, []hashutil.Hash{emptyHash}, 1)
+	})
+
+	t.Run("S3 fail, S3 not found, stor fallback", func(t *testing.T) {
+		httpClientTouch := 0
+		httpClient := func() httpClient {
+			defer func() { httpClientTouch++ }()
+			if httpClientTouch == 0 {
+				return &clientMock{statusCode: 500, status: "Something bad"}
+			} else if httpClientTouch == 1 {
+				return &clientMock{statusCode: 404, status: "Not found"}
+			} else {
+				return &clientMock{statusCode: 200, status: "Ok"}
+			}
+		}
+		downloadWorkersTestDownloadOK(t, StorClientOpts{S3URL: &url.URL{}}, httpClient, []hashutil.Hash{emptyHash}, 1)
+	})
 }
 
-func downloadWorkersTest(t *testing.T, storClientOpts StorClientOpts, httpClient httpClient, sha256list []hashutil.Hash, workers int, asserts func(pathutil.Path, []DownStat)) {
+func downloadWorkersTest(t *testing.T, storClientOpts StorClientOpts, httpClientFunc func() httpClient, sha256list []hashutil.Hash, workers int, asserts func(pathutil.Path, []DownStat)) {
 	tempdir, err := pathutil.NewTempDir(pathutil.TempOpt{})
 	assert.NoError(t, err)
 	defer func() {
 		assert.NoError(t, tempdir.RemoveTree())
 	}()
-	storClient := New(url.URL{}, tempdir.Canonpath(), storClientOpts)
+	storClient, err := New(url.URL{}, tempdir.Canonpath(), storClientOpts)
+	assert.NoError(t, err)
 
 	storClient.wg.Add(workers)
 	log.SetLevel(log.DebugLevel)
@@ -187,7 +198,7 @@ func downloadWorkersTest(t *testing.T, storClientOpts StorClientOpts, httpClient
 	shasForDownload <- workerEnd
 
 	for i := 0; i < workers; i++ {
-		go storClient.downloadWorker(0, httpClient, shasForDownload, downloadedFilesStat)
+		go storClient.downloadWorker(0, httpClientFunc, shasForDownload, downloadedFilesStat)
 	}
 
 	stats := make([]DownStat, workers)
@@ -195,4 +206,18 @@ func downloadWorkersTest(t *testing.T, storClientOpts StorClientOpts, httpClient
 		stats[i] = <-downloadedFilesStat
 	}
 	asserts(tempdir, stats)
+}
+
+func downloadWorkersTestDownloadOK(t *testing.T, storClientOpts StorClientOpts, httpClientFunc func() httpClient, sha256list []hashutil.Hash, workers int) {
+	downloadWorkersTest(t, storClientOpts, httpClientFunc, sha256list, workers, func(tempdir pathutil.Path, stat []DownStat) {
+		assert.Equal(t, DOWN_OK, stat[0].Status)
+		assert.Equal(t, int64(0), stat[0].Size)
+
+		downloadFile, err := tempdir.Child(strings.ToLower(emptyHash.String()))
+		assert.NoError(t, err)
+
+		if !assert.True(t, downloadFile.Exists()) {
+			t.Log(tempdir.Children())
+		}
+	})
 }

@@ -1,4 +1,5 @@
-/* Client to download samples from stor service
+/*
+Package storclient to download samples from stor service
 
 SYNOPSIS
 
@@ -20,12 +21,14 @@ import (
 	//"net/http"
 	"net/url"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/avast/hashutil-go"
 	log "github.com/sirupsen/logrus"
 )
 
+// StorClientOpts is base struct
 type StorClientOpts struct {
 	//	max size of download pool
 	Max int
@@ -47,6 +50,10 @@ type StorClientOpts struct {
 	Suffix string
 	// name of file will be upper case (not applied to extension)
 	UpperCase bool
+	// host to s3 endpoint with bucket e.g. https://bucket.s3.eu-central-1.amazonaws.com, if is s3url set, first will be use S3, then fallback to stor
+	S3URL *url.URL
+	// template to S3 path
+	S3Template string
 }
 
 const (
@@ -54,6 +61,7 @@ const (
 	DefaultTimeout       = 30 * time.Second
 	DefaultRetryAttempts = 10
 	DefaultRetryDelay    = 1e5 * time.Microsecond
+	DefaultS3Template    = "{{.FirstShaByte}}/{{.SecondShaByte}}/{{.ThirdShaByte}}/{{.Sha}}"
 )
 
 type DownPool struct {
@@ -70,17 +78,18 @@ type StorClient struct {
 	wg                    sync.WaitGroup
 	expectedDownloadCount int
 	currentDownloads      currentDownloads
+	s3template            *template.Template
 	StorClientOpts
 }
 
 type DownloadStatus int
 
 const (
-	// downlad fail (default)
+	// DOWN_FAIL - downlad fail (default)
 	DOWN_FAIL DownloadStatus = iota
-	// downlad skipped because file is downlad
+	// DOWN_SKIP - downlad skipped because file is downlad
 	DOWN_SKIP
-	// downlad ok
+	// DOWN_OK - downlad ok
 	DOWN_OK
 )
 
@@ -105,7 +114,7 @@ type TotalStat struct {
 var workerEnd hashutil.Hash = hashutil.Hash{}
 
 // Create new instance of stor client
-func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
+func New(storUrl url.URL, downloadDir string, opts StorClientOpts) (*StorClient, error) {
 	client := StorClient{}
 
 	client.storageUrl = storUrl
@@ -139,6 +148,17 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 		client.RetryAttempts = opts.RetryAttempts
 	}
 
+	client.S3URL = opts.S3URL
+	if opts.S3Template == "" {
+		opts.S3Template = DefaultS3Template
+	}
+	client.S3Template = opts.S3Template
+	tmpl, err := template.New("s3template").Parse(opts.S3Template)
+	if err != nil {
+		return nil, err
+	}
+	client.s3template = tmpl
+
 	downloadPool := DownPool{
 		input:  make(chan hashutil.Hash, 1024),
 		output: make(chan DownStat, 1024),
@@ -146,14 +166,14 @@ func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient {
 
 	client.pool = downloadPool
 
-	return &client
+	return &client, nil
 }
 
 // start stor downloading process
 func (client *StorClient) Start() {
 	for id := 0; id < client.Max; id++ {
 		client.wg.Add(1)
-		go client.downloadWorker(id, client.newHttpClient(), client.pool.input, client.pool.output)
+		go client.downloadWorker(id, client.newHTTPClient, client.pool.input, client.pool.output)
 	}
 
 	client.total = make(chan TotalStat, 1)

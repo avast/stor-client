@@ -2,8 +2,8 @@
 --
     import "github.com/avast/stor-client/client"
 
+Package storclient to download samples from stor service
 
-    Client to download samples from stor service
 ### SYNOPSIS
 
     client := storclient.New(storageUrl, storclient.StorClientOpts{})
@@ -24,6 +24,7 @@ const (
 	DefaultTimeout       = 30 * time.Second
 	DefaultRetryAttempts = 10
 	DefaultRetryDelay    = 1e5 * time.Microsecond
+	DefaultS3Template    = "{{.FirstShaByte}}/{{.SecondShaByte}}/{{.ThirdShaByte}}/{{.Sha}}"
 )
 ```
 
@@ -55,11 +56,11 @@ type DownloadStatus int
 
 ```go
 const (
-	// downlad fail (default)
+	// DOWN_FAIL - downlad fail (default)
 	DOWN_FAIL DownloadStatus = iota
-	// downlad skipped because file is downlad
+	// DOWN_SKIP - downlad skipped because file is downlad
 	DOWN_SKIP
-	// downlad ok
+	// DOWN_OK - downlad ok
 	DOWN_OK
 )
 ```
@@ -76,7 +77,7 @@ type StorClient struct {
 #### func  New
 
 ```go
-func New(storUrl url.URL, downloadDir string, opts StorClientOpts) *StorClient
+func New(storUrl url.URL, downloadDir string, opts StorClientOpts) (*StorClient, error)
 ```
 Create new instance of stor client
 
@@ -125,9 +126,14 @@ type StorClientOpts struct {
 	Suffix string
 	// name of file will be upper case (not applied to extension)
 	UpperCase bool
+	// host to s3 endpoint with bucket e.g. https://bucket.s3.eu-central-1.amazonaws.com, if is s3url set, first will be use S3, then fallback to stor
+	S3URL *url.URL
+	// template to S3 path
+	S3Template string
 }
 ```
 
+StorClientOpts is base struct
 
 #### type TotalStat
 
