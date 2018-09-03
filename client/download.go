@@ -119,7 +119,7 @@ func (client *StorClient) downloadWorker(id int, httpClientFunc func() httpClien
 						log.WithFields(log.Fields{
 							"worker": id,
 							"sha256": sha.String(),
-						}).Warningf("S3 template fail:", urlErr)
+						}).Warningf("S3 template fail: %s", urlErr)
 					} else {
 						log.WithFields(log.Fields{
 							"worker": id,
