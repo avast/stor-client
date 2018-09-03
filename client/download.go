@@ -1,6 +1,7 @@
 package storclient
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -49,7 +50,7 @@ func (err downloadError) Error() string {
 //	}
 //}
 
-func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForDownload <-chan hashutil.Hash, downloadedFilesStat chan<- DownStat) {
+func (client *StorClient) downloadWorker(id int, httpClientFunc func() httpClient, shasForDownload <-chan hashutil.Hash, downloadedFilesStat chan<- DownStat) {
 	defer client.wg.Done()
 
 	log.WithField("worker", id).Debugln("Start download worker...")
@@ -100,15 +101,44 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 
 		startTime := time.Now()
 
+		tryS3 := false
+		if client.S3URL != nil {
+			tryS3 = true
+		}
+
 		var size int64
 		err = retry.Do(
 			func() error {
 				var err error
 
+				var u string
+				if tryS3 {
+					var urlErr error
+					u, urlErr = client.createS3URL(sha)
+					if urlErr != nil {
+						log.WithFields(log.Fields{
+							"worker": id,
+							"sha256": sha.String(),
+						}).Warningf("S3 template fail: %s", urlErr)
+					} else {
+						log.WithFields(log.Fields{
+							"worker": id,
+							"sha256": sha.String(),
+						}).Debugf("Use S3 url %s", u)
+					}
+				}
+				if u == "" {
+					u = client.createStorURL(sha)
+					log.WithFields(log.Fields{
+						"worker": id,
+						"sha256": sha.String(),
+					}).Debugf("Use Stor url %s", u)
+				}
+
 				if client.Devnull {
-					size, err = downloadFileToDevnull(httpClient, client.createUrl(sha), sha)
+					size, err = downloadFileToDevnull(httpClientFunc(), u, sha)
 				} else {
-					size, err = downloadFileViaTempFile(httpClient, filepath, client.createUrl(sha), sha)
+					size, err = downloadFileViaTempFile(httpClientFunc(), filepath, u, sha)
 				}
 
 				return err
@@ -117,13 +147,14 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 				log.WithFields(log.Fields{
 					"worker": id,
 					"sha256": sha.String(),
-					//}).WithFields(err.(logFieldsError).LogFields()).Debugf("Retry #%d: %s", n, err)
 				}).Debugf("Retry #%d: %s", n, err)
 			}),
 			retry.RetryIf(func(err error) bool {
 				switch e := err.(type) {
 				case downloadError:
-					if (downloadError)(e).statusCode == 404 {
+					if (downloadError)(e).statusCode == 404 && tryS3 {
+						tryS3 = false
+					} else if (downloadError)(e).statusCode == 404 {
 						return false
 					}
 				}
@@ -155,7 +186,7 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 	}
 }
 
-func (client *StorClient) newHttpClient() *http.Client {
+func (client *StorClient) newHTTPClient() httpClient {
 	tr := &http.Transport{
 		MaxIdleConns:    client.Max,
 		IdleConnTimeout: client.Timeout,
@@ -164,10 +195,20 @@ func (client *StorClient) newHttpClient() *http.Client {
 	return &http.Client{Transport: tr}
 }
 
-func (client *StorClient) createUrl(sha hashutil.Hash) string {
+func (client *StorClient) createS3URL(sha hashutil.Hash) (string, error) {
+	var pathBytes bytes.Buffer
+	shaStr := sha.String()
+	params := struct{ Sha, FirstShaByte, SecondShaByte, ThirdShaByte string }{shaStr, shaStr[0:2], shaStr[2:4], shaStr[4:6]}
+	if err := client.s3template.Execute(&pathBytes, params); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%s/%s", client.S3URL.String(), pathBytes.String()), nil
+}
+
+func (client *StorClient) createStorURL(sha hashutil.Hash) string {
 	storage := (client.storageUrl).String()
 	storage = strings.TrimRight(storage, "/")
-
 	return fmt.Sprintf("%s/%s", storage, sha)
 }
 
