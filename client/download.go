@@ -1,11 +1,13 @@
 package storclient
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -31,6 +33,11 @@ type downloadError struct {
 	status     string
 }
 
+type successDownload struct {
+	size         int64
+	lastModified time.Time
+}
+
 func (err downloadError) Error() string {
 	return fmt.Sprintf("Download of %s fail %d (%s)", err.sha, err.statusCode, err.status)
 }
@@ -43,7 +50,7 @@ func (err downloadError) Error() string {
 //	}
 //}
 
-func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForDownload <-chan hashutil.Hash, downloadedFilesStat chan<- DownStat) {
+func (client *StorClient) downloadWorker(id int, httpClientFunc func() httpClient, shasForDownload <-chan hashutil.Hash, downloadedFilesStat chan<- DownStat) {
 	defer client.wg.Done()
 
 	log.WithField("worker", id).Debugln("Start download worker...")
@@ -94,15 +101,44 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 
 		startTime := time.Now()
 
+		tryS3 := false
+		if client.S3URL != nil {
+			tryS3 = true
+		}
+
 		var size int64
 		err = retry.Do(
 			func() error {
 				var err error
 
+				var u string
+				if tryS3 {
+					var urlErr error
+					u, urlErr = client.createS3URL(sha)
+					if urlErr != nil {
+						log.WithFields(log.Fields{
+							"worker": id,
+							"sha256": sha.String(),
+						}).Warningf("S3 template fail: %s", urlErr)
+					} else {
+						log.WithFields(log.Fields{
+							"worker": id,
+							"sha256": sha.String(),
+						}).Debugf("Use S3 url %s", u)
+					}
+				}
+				if u == "" {
+					u = client.createStorURL(sha)
+					log.WithFields(log.Fields{
+						"worker": id,
+						"sha256": sha.String(),
+					}).Debugf("Use Stor url %s", u)
+				}
+
 				if client.Devnull {
-					size, err = downloadFileToDevnull(httpClient, client.createUrl(sha), sha)
+					size, err = downloadFileToDevnull(httpClientFunc(), u, sha)
 				} else {
-					size, err = downloadFileViaTempFile(httpClient, filepath, client.createUrl(sha), sha)
+					size, err = downloadFileViaTempFile(httpClientFunc(), filepath, u, sha)
 				}
 
 				return err
@@ -111,13 +147,14 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 				log.WithFields(log.Fields{
 					"worker": id,
 					"sha256": sha.String(),
-					//}).WithFields(err.(logFieldsError).LogFields()).Debugf("Retry #%d: %s", n, err)
 				}).Debugf("Retry #%d: %s", n, err)
 			}),
 			retry.RetryIf(func(err error) bool {
 				switch e := err.(type) {
 				case downloadError:
-					if (downloadError)(e).statusCode == 404 {
+					if (downloadError)(e).statusCode == 404 && tryS3 {
+						tryS3 = false
+					} else if (downloadError)(e).statusCode == 404 {
 						return false
 					}
 				}
@@ -149,7 +186,7 @@ func (client *StorClient) downloadWorker(id int, httpClient httpClient, shasForD
 	}
 }
 
-func (client *StorClient) newHttpClient() *http.Client {
+func (client *StorClient) newHTTPClient() httpClient {
 	tr := &http.Transport{
 		MaxIdleConns:    client.Max,
 		IdleConnTimeout: client.Timeout,
@@ -158,15 +195,26 @@ func (client *StorClient) newHttpClient() *http.Client {
 	return &http.Client{Transport: tr}
 }
 
-func (client *StorClient) createUrl(sha hashutil.Hash) string {
+func (client *StorClient) createS3URL(sha hashutil.Hash) (string, error) {
+	var pathBytes bytes.Buffer
+	shaStr := sha.String()
+	params := struct{ Sha, FirstShaByte, SecondShaByte, ThirdShaByte string }{shaStr, shaStr[0:2], shaStr[2:4], shaStr[4:6]}
+	if err := client.s3template.Execute(&pathBytes, params); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%s/%s", client.S3URL.String(), pathBytes.String()), nil
+}
+
+func (client *StorClient) createStorURL(sha hashutil.Hash) string {
 	storage := (client.storageUrl).String()
 	storage = strings.TrimRight(storage, "/")
-
 	return fmt.Sprintf("%s/%s", storage, sha)
 }
 
 func downloadFileToDevnull(httpClient httpClient, url string, expectedSha hashutil.Hash) (size int64, err error) {
-	return downloadFileToWriter(httpClient, url, ioutil.Discard, expectedSha)
+	succ, err := downloadFileToWriter(httpClient, url, ioutil.Discard, expectedSha)
+	return succ.size, err
 }
 
 func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url string, expectedSha hashutil.Hash) (size int64, err error) {
@@ -190,22 +238,26 @@ func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url 
 		}
 	}
 
-	size, err = downloadFile(httpClient, temppath, url, expectedSha)
+	succ, err := downloadFile(httpClient, temppath, url, expectedSha)
 	if err != nil {
-		return size, err
+		return 0, err
 	}
 
 	if _, err := temppath.Rename(filepath.Canonpath()); err != nil {
 		return 0, errors.Wrapf(err, "Rename temp %s to final path %s fail", temppath, filepath)
 	}
 
-	return size, nil
+	if err = os.Chtimes(filepath.Canonpath(), succ.lastModified, succ.lastModified); err != nil {
+		return 0, errors.Wrapf(err, "Chtimes(%s, %s) fail", filepath.Canonpath(), succ.lastModified.String())
+	}
+
+	return succ.size, nil
 }
 
-func downloadFile(httpClient httpClient, path pathutil.Path, url string, expectedSha hashutil.Hash) (size int64, err error) {
+func downloadFile(httpClient httpClient, path pathutil.Path, url string, expectedSha hashutil.Hash) (succ successDownload, err error) {
 	out, err := path.OpenWriter()
 	if err != nil {
-		return 0, errors.Wrapf(err, "OpenWriter to tempfile %s fail", path)
+		return successDownload{}, errors.Wrapf(err, "OpenWriter to tempfile %s fail", path)
 	}
 
 	defer func() {
@@ -217,10 +269,10 @@ func downloadFile(httpClient httpClient, path pathutil.Path, url string, expecte
 	return downloadFileToWriter(httpClient, url, out, expectedSha)
 }
 
-func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expectedSha hashutil.Hash) (size int64, err error) {
+func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expectedSha hashutil.Hash) (succ successDownload, err error) {
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		return 0, err
+		return successDownload{}, err
 	}
 	defer func() {
 		if errClose := resp.Body.Close(); errClose != nil {
@@ -229,25 +281,48 @@ func downloadFileToWriter(httpClient httpClient, url string, out io.Writer, expe
 	}()
 
 	if resp.StatusCode != 200 {
-		return 0, downloadError{sha: expectedSha, statusCode: resp.StatusCode, status: resp.Status}
+		return successDownload{}, downloadError{sha: expectedSha, statusCode: resp.StatusCode, status: resp.Status}
+	}
+
+	lastModified, err := getLastModifiedTime(resp)
+	if err != nil {
+		return successDownload{}, err
 	}
 
 	hasher := sha256.New()
 	multi := io.MultiWriter(out, hasher)
 
-	size, err = io.Copy(multi, resp.Body)
+	size, err := io.Copy(multi, resp.Body)
 	if err != nil {
-		return 0, err
+		return successDownload{}, err
 	}
 
 	downSha256, err := hashutil.BytesToHash(sha256.New(), hasher.Sum(nil))
 	if err != nil {
-		return 0, err
+		return successDownload{}, err
 	}
 
 	if !downSha256.Equal(expectedSha) {
-		return 0, fmt.Errorf("Downloaded sha (%s) is not equal with expected sha (%s)", downSha256, expectedSha)
+		return successDownload{}, fmt.Errorf("Downloaded sha (%s) is not equal with expected sha (%s)", downSha256, expectedSha)
 	}
 
-	return size, nil
+	return successDownload{
+		size:         size,
+		lastModified: lastModified,
+	}, nil
+}
+
+func getLastModifiedTime(resp *http.Response) (time.Time, error) {
+	lastModified := time.Now()
+	var err error
+
+	if lastModifiedStr := resp.Header.Get("Last-Modified"); lastModifiedStr != "" {
+		log.Info(lastModifiedStr)
+		lastModified, err = http.ParseTime(lastModifiedStr)
+		if err != nil {
+			return lastModified, err
+		}
+	}
+
+	return lastModified, nil
 }

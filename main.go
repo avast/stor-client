@@ -4,12 +4,14 @@ stor-client is command line utility for downloading from stor
 
 what is stor?
 
-stor (https://github.com/avast/stor) is storage HTTP interface for sha256 files (objects)
+Stor (https://github.com/avast/stor) is storage HTTP interface for sha256 files (objects).
+Stor can help with step by step migration from posix storage to object storage (aka S3).
 
 features
 
 * download retry
 * concurent download (default `4`)
+* S3 download as primary place, stor as fallback
 
 cli
 
@@ -53,6 +55,8 @@ var (
 	retryAttempts = kingpin.Flag("attempts", "count of attempts of retry").Default(strconv.Itoa(storclient.DefaultRetryAttempts)).Uint()
 	suffix        = kingpin.Flag("suffix", "downloaded file suffix - like '.dat' => SHA.dat").Default("").String()
 	upperCase     = kingpin.Flag("upper", "name of file will be upper case (not applied to suffix)").Bool()
+	s3url         = kingpin.Flag("s3host", "host to s3 endpoint with bucket e.g. https://bucket.s3.eu-central-1.amazonaws.com, if is s3url set, first will be use S3, then fallback to stor").URL()
+	s3template    = kingpin.Flag("s3template", "template to S3 path").Default(storclient.DefaultS3Template).String()
 )
 
 func main() {
@@ -68,7 +72,7 @@ func main() {
 	}
 
 	startTime := time.Now()
-	client := storclient.New(**storageUrl, *downloadDir, storclient.StorClientOpts{
+	client, err := storclient.New(**storageUrl, *downloadDir, storclient.StorClientOpts{
 		Max:           *max,
 		Devnull:       *devnull,
 		Timeout:       *timeout,
@@ -76,7 +80,12 @@ func main() {
 		RetryAttempts: *retryAttempts,
 		Suffix:        *suffix,
 		UpperCase:     *upperCase,
+		S3URL:         *s3url,
+		S3Template:    *s3template,
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	client.Start()
 
 	shas := readShaFromReader(os.Stdin)
