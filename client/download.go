@@ -68,9 +68,9 @@ func (client *StorClient) downloadWorker(id int, httpClientFunc func() httpClien
 
 		filename += client.Suffix
 
-		filepath, err := pathutil.NewPath(client.downloadDir, filename)
+		filepath, err := pathutil.New(client.downloadDir, filename)
 		if err != nil {
-			log.Errorf("NewPath problem: %s", err)
+			log.Errorf("path problem: %s", err)
 
 			downloadedFilesStat <- DownStat{Status: DOWN_FAIL}
 
@@ -218,7 +218,7 @@ func downloadFileToDevnull(httpClient httpClient, url string, expectedSha hashut
 }
 
 func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url string, expectedSha hashutil.Hash) (size int64, err error) {
-	temppath, err := pathutil.NewPath(filepath.String() + ".temp")
+	temppath, err := pathutil.New(filepath.String() + ".temp")
 	if err != nil {
 		return 0, errors.Wrap(err, "Construct of new temp file fail")
 	}
