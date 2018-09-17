@@ -30,7 +30,7 @@ echo EE2BF0BFD365EBF829F8D07B197B7A15F39760CD14C6D3BFDFBAD2B145CB72B8 | stor-cli
 ### help
 
 ```
-usage: stor-cli.exe [<flags>] <downloadDir>
+usage: stor-cli [<flags>] <downloadDir>
 
 Flags:
       --help           Show context-sensitive help (also try --help-long and --help-man).
