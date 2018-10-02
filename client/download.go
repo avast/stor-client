@@ -218,7 +218,7 @@ func downloadFileToDevnull(httpClient httpClient, url string, expectedSha hashut
 }
 
 func downloadFileViaTempFile(httpClient httpClient, filepath pathutil.Path, url string, expectedSha hashutil.Hash) (size int64, err error) {
-	temppath, err := pathutil.New(filepath.String() + ".temp")
+	temppath, err := pathutil.NewTempFile(pathutil.TempOpt{Dir: filepath.Parent().Canonpath(), Prefix: fmt.Sprintf("%s_*.temp", expectedSha)})
 	if err != nil {
 		return 0, errors.Wrap(err, "Construct of new temp file fail")
 	}
