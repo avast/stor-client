@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -190,6 +191,9 @@ func (client *StorClient) newHTTPClient() httpClient {
 	tr := &http.Transport{
 		MaxIdleConns:    client.Max,
 		IdleConnTimeout: client.Timeout,
+		Dial: (&net.Dialer{
+			KeepAlive: 0,
+		}).Dial,
 	}
 
 	return &http.Client{Transport: tr}
