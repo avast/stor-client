@@ -20,7 +20,7 @@
 
 [[constraint]]
   name = "github.com/JaSei/pathutil-go"
-  version = "0.2.0"
+  version = "0.3.1"
 
 [[constraint]]
   name = "github.com/pkg/errors"
