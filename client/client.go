@@ -73,7 +73,6 @@ type StorClient struct {
 	downloadDir           string
 	storageUrl            url.URL
 	pool                  DownPool
-	httpClient            httpClient
 	total                 chan TotalStat
 	wg                    sync.WaitGroup
 	expectedDownloadCount int
